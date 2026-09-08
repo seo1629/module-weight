@@ -107,6 +107,47 @@ module ModularWeightExporter
       )
     end
 
+    # ③으로 계산유형만 바꾼 뒤 기준면/기준축이 비어있는 경우를 위한 명령.
+    # ★와 달리 형상을 보고 유형을 다시 판별하지 않고, 지금 지정된 quantity_basis를
+    # 그대로 둔 채 경계상자 기반으로 기준면(전체 면)/기준축(긴 방향)만 채운다.
+    def fill_basis_geometry
+      targets = selected_containers.select { |e| ModularWeightExporter.role_of(e) == 'PART' }
+      if targets.empty?
+        UI.messagebox('role=PART로 지정된 그룹/컴포넌트를 먼저 선택하세요.')
+        return
+      end
+
+      lines = []
+      targets.each do |e|
+        begin
+          basis = ModularWeightExporter.quantity_basis_of(e)
+          case basis
+          when 'REFERENCE_FACES'
+            faces = AutoDetect.all_faces(e)
+            if faces.empty?
+              lines << "- #{e.name}: 면을 찾지 못했습니다 → ⑤로 직접 지정하세요."
+            else
+              ModularWeightExporter.set_attr(e, 'reference_face_ids', faces.map(&:persistent_id))
+              lines << "- #{e.name}: 기준면 #{faces.length}개 자동 채움"
+            end
+          when 'AXIS_ENDPOINTS'
+            axis_index, p1, p2 = AutoDetect.axis_endpoints_for(e)
+            ModularWeightExporter.set_attr(e, 'axis_endpoints_local', [p1, p2])
+            ModularWeightExporter.set_attr(e, 'length_axis_index', axis_index)
+            lines << "- #{e.name}: 기준축 자동 채움 (경계상자 긴 방향)"
+          when 'SOLID', 'INSTANCE'
+            lines << "- #{e.name}: 이 계산유형은 추가로 채울 게 없습니다."
+          else
+            lines << "- #{e.name}: quantity_basis가 없습니다 → ③을 먼저 실행하세요."
+          end
+        rescue StandardError => err
+          lines << "- #{e.name}: 오류(#{err.message})"
+        end
+      end
+
+      UI.messagebox("기준면/기준축 자동 채우기 결과 (#{targets.length}개):\n\n#{lines.join("\n")}")
+    end
+
     def assign_module
       targets = selected_containers
       return alert_no_selection if targets.empty?
