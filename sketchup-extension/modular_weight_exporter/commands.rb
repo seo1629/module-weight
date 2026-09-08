@@ -11,6 +11,22 @@ module ModularWeightExporter
       UI.messagebox('그룹 또는 컴포넌트를 먼저 선택하세요.')
     end
 
+    # role=MODULE인 그룹은 ②/③/④/★ 대상에서 항상 보호한다 - 여러 번 실수로
+    # 모듈 껍데기 자체의 role이 PART/CONTAINER/IGNORE로 덮어써지는 사고가 반복돼서 추가함.
+    # 반환값: [보호되어 제외된 목록, 실제로 처리할 목록]
+    def split_protected(targets)
+      targets.partition { |e| ModularWeightExporter.role_of(e) == 'MODULE' }
+    end
+
+    def entity_names(list)
+      list.map { |e| e.name.to_s.empty? ? '(이름없음)' : e.name }.join(', ')
+    end
+
+    def protected_warning(protected_targets)
+      return '' if protected_targets.empty?
+      "\n\n⚠ MODULE로 지정된 그룹 #{protected_targets.length}개는 보호되어 건너뛰었습니다 (모듈 껍데기에는 실행 안 함): #{entity_names(protected_targets)}"
+    end
+
     def pick_category(allow_inherit: false)
       options = CATEGORIES.dup
       options.unshift('(상위에서 상속)') if allow_inherit
@@ -59,8 +75,13 @@ module ModularWeightExporter
     # 형상을 보고 AREA/VOLUME/LENGTH를 자동 판별해 기준면/기준축까지 한 번에 지정한다.
     # 애매한 형상만 사용자가 ③/⑤/⑥으로 수동 지정하면 된다.
     def auto_assign_parts
-      targets = selected_containers
-      return alert_no_selection if targets.empty?
+      all_targets = selected_containers
+      return alert_no_selection if all_targets.empty?
+      protected_targets, targets = split_protected(all_targets)
+      if targets.empty?
+        UI.messagebox("선택한 항목이 전부 이미 MODULE로 지정된 그룹입니다 (보호됨).\n모듈 껍데기가 아니라 그 안의 개별 부재를 선택해주세요.")
+        return
+      end
       cat, tag = pick_category_and_tag(allow_inherit: true) || return
 
       lines = []
@@ -103,7 +124,8 @@ module ModularWeightExporter
       UI.messagebox(
         "자동 지정 결과 (#{targets.length}개):\n\n#{lines.join("\n")}\n\n" \
         "결과가 이상하면 그 부재만 ③(계산유형 다시 지정) 또는 ⑤/⑥(수동 지정)으로 고치세요.\n" \
-        "Tag를 비워뒀다면 SketchUp Tag 패널에서 직접 지정하세요."
+        "Tag를 비워뒀다면 SketchUp Tag 패널에서 직접 지정하세요." \
+        "#{protected_warning(protected_targets)}"
       )
     end
 
@@ -161,20 +183,30 @@ module ModularWeightExporter
     end
 
     def assign_container
-      targets = selected_containers
-      return alert_no_selection if targets.empty?
+      all_targets = selected_containers
+      return alert_no_selection if all_targets.empty?
+      protected_targets, targets = split_protected(all_targets)
+      if targets.empty?
+        UI.messagebox("선택한 항목이 전부 이미 MODULE로 지정된 그룹입니다 (보호됨).\n모듈 껍데기가 아니라 그 안의 그룹을 선택해주세요.")
+        return
+      end
       cat = pick_category
       return if cat.nil?
       targets.each do |e|
         ModularWeightExporter.set_attr(e, 'role', 'CONTAINER')
         ModularWeightExporter.set_attr(e, 'category', cat)
       end
-      UI.messagebox("#{targets.length}개를 CONTAINER(#{cat})로 지정했습니다.")
+      UI.messagebox("#{targets.length}개를 CONTAINER(#{cat})로 지정했습니다.#{protected_warning(protected_targets)}")
     end
 
     def assign_part
-      targets = selected_containers
-      return alert_no_selection if targets.empty?
+      all_targets = selected_containers
+      return alert_no_selection if all_targets.empty?
+      protected_targets, targets = split_protected(all_targets)
+      if targets.empty?
+        UI.messagebox("선택한 항목이 전부 이미 MODULE로 지정된 그룹입니다 (보호됨).\n모듈 껍데기가 아니라 그 안의 개별 부재를 선택해주세요.")
+        return
+      end
       cat = pick_category(allow_inherit: true)
       return if cat.nil?
       basis = pick_quantity_basis
@@ -184,19 +216,24 @@ module ModularWeightExporter
         ModularWeightExporter.set_attr(e, 'category', cat == :inherit ? nil : cat)
         ModularWeightExporter.set_attr(e, 'quantity_basis', basis)
       end
-      UI.messagebox("#{targets.length}개를 PART(#{basis})로 지정했습니다.\nTag는 SketchUp의 Tag(레이어) 패널에서 별도로 지정하세요.")
+      UI.messagebox("#{targets.length}개를 PART(#{basis})로 지정했습니다.\nTag는 SketchUp의 Tag(레이어) 패널에서 별도로 지정하세요.#{protected_warning(protected_targets)}")
     end
 
     def assign_ignore
-      targets = selected_containers
-      return alert_no_selection if targets.empty?
+      all_targets = selected_containers
+      return alert_no_selection if all_targets.empty?
+      protected_targets, targets = split_protected(all_targets)
+      if targets.empty?
+        UI.messagebox("선택한 항목이 전부 이미 MODULE로 지정된 그룹입니다 (보호됨).\n모듈 껍데기를 IGNORE로 지정할 수 없습니다.")
+        return
+      end
       result = UI.inputbox(['제외 사유 (필수)'], [''], 'IGNORE 지정')
       return if result == false || result[0].to_s.strip.empty?
       targets.each do |e|
         ModularWeightExporter.set_attr(e, 'role', 'IGNORE')
         ModularWeightExporter.set_attr(e, 'exclude_reason', result[0])
       end
-      UI.messagebox("#{targets.length}개를 IGNORE로 지정했습니다.")
+      UI.messagebox("#{targets.length}개를 IGNORE로 지정했습니다.#{protected_warning(protected_targets)}")
     end
 
     def toggle_excluded
