@@ -22,9 +22,11 @@ module ModularWeightExporter
     end
 
     def pick_quantity_basis
-      result = UI.inputbox(['계산 기준(quantity_basis)'], [QUANTITY_BASES.first], [QUANTITY_BASES.join('|')], '계산 기준 선택')
+      labels = QUANTITY_BASES.map { |b| QUANTITY_BASIS_LABELS[b] }
+      result = UI.inputbox(['계산 기준 (AREA/VOLUME/LENGTH/COUNT)'], [labels.first], [labels.join('|')], '계산 기준 선택')
       return nil if result == false
-      result[0]
+      idx = labels.index(result[0])
+      idx ? QUANTITY_BASES[idx] : nil
     end
 
     def pick_category_and_tag(allow_inherit: false)
