@@ -1,0 +1,256 @@
+{
+  "schema_version": "1.0.0",
+  "export_id": "20000000-0000-4000-8000-000000000001",
+  "exported_at": "2026-09-08T04:00:00Z",
+  "exporter": {
+    "name": "ModularWeightExporter fixture",
+    "version": "0.1.0",
+    "sketchup_version": "fixture-not-executed"
+  },
+  "model": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "name": "개발 검수용 가상 모델"
+  },
+  "units": {
+    "area": "m2",
+    "length": "m",
+    "volume": "m3",
+    "count": "EA"
+  },
+  "coordinate_system": {
+    "up_axis": "Z",
+    "handedness": "RIGHT",
+    "frame": "SKETCHUP_WORLD"
+  },
+  "scope": {
+    "mode": "ALL_REGISTERED_MODULES",
+    "includes_hidden": true
+  },
+  "modules": [
+    {
+      "name": "MODULE_A01",
+      "bounds_world_m": {
+        "max": [
+          2.5,
+          2.5,
+          1.25
+        ],
+        "min": [
+          -1,
+          -0.5,
+          -0.5
+        ]
+      },
+      "axes_world": {
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      },
+      "id": "module-a01",
+      "origin_world_m": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001:101.201",
+      "instance_path": "101.201",
+      "name": "시험 보",
+      "module_id": "module-a01",
+      "category": "OTHER",
+      "tag": "TEST_BEAM",
+      "quantity_basis": "AXIS_ENDPOINTS",
+      "included": true,
+      "exclude_reason": null,
+      "visibility": {
+        "tag_visible": true,
+        "hidden": false
+      },
+      "metrics": {
+        "area_m2": null,
+        "volume_m3": null,
+        "length_m": {
+          "value": 2,
+          "centroid_world_m": [
+            1,
+            0,
+            0
+          ],
+          "quantity_method": "TRANSFORMED_AXIS_ENDPOINTS",
+          "centroid_method": "AXIS_MIDPOINT",
+          "quality": "CALCULATED",
+          "assumptions": [
+            "개발 검수용 가상 형상과 균일 밀도. USER_POINT는 테스트 설계에서 지정한 점이며 실제 제조사 자료가 아님."
+          ]
+        },
+        "count": null
+      },
+      "bounds_world_m": {
+        "max": [
+          2,
+          0.05,
+          0.05
+        ],
+        "min": [
+          0,
+          -0.05,
+          -0.05
+        ]
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001:101.202",
+      "instance_path": "101.202",
+      "name": "시험 보드",
+      "module_id": "module-a01",
+      "category": "OTHER",
+      "tag": "TEST_BOARD",
+      "quantity_basis": "REFERENCE_FACES",
+      "included": true,
+      "exclude_reason": null,
+      "visibility": {
+        "tag_visible": true,
+        "hidden": false
+      },
+      "metrics": {
+        "area_m2": {
+          "value": 6,
+          "centroid_world_m": [
+            0,
+            1,
+            0
+          ],
+          "quantity_method": "TRANSFORMED_REFERENCE_FACES",
+          "centroid_method": "AREA_WEIGHTED",
+          "quality": "CALCULATED",
+          "assumptions": [
+            "개발 검수용 가상 형상과 균일 밀도. USER_POINT는 테스트 설계에서 지정한 점이며 실제 제조사 자료가 아님."
+          ]
+        },
+        "volume_m3": null,
+        "length_m": null,
+        "count": null
+      },
+      "bounds_world_m": {
+        "max": [
+          1,
+          2.5,
+          0
+        ],
+        "min": [
+          -1,
+          -0.5,
+          0
+        ]
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001:101.203",
+      "instance_path": "101.203",
+      "name": "시험 블록",
+      "module_id": "module-a01",
+      "category": "OTHER",
+      "tag": "TEST_BLOCK",
+      "quantity_basis": "SOLID",
+      "included": true,
+      "exclude_reason": null,
+      "visibility": {
+        "tag_visible": true,
+        "hidden": false
+      },
+      "metrics": {
+        "area_m2": null,
+        "volume_m3": {
+          "value": 0.1,
+          "centroid_world_m": [
+            0,
+            0,
+            1
+          ],
+          "quantity_method": "CLOSED_MESH_INTEGRAL",
+          "centroid_method": "VOLUME_INTEGRAL",
+          "quality": "CALCULATED",
+          "assumptions": [
+            "개발 검수용 가상 형상과 균일 밀도. USER_POINT는 테스트 설계에서 지정한 점이며 실제 제조사 자료가 아님."
+          ]
+        },
+        "length_m": null,
+        "count": null
+      },
+      "bounds_world_m": {
+        "max": [
+          0.25,
+          0.2,
+          1.25
+        ],
+        "min": [
+          -0.25,
+          -0.2,
+          0.75
+        ]
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001:101.204",
+      "instance_path": "101.204",
+      "name": "시험 장비",
+      "module_id": "module-a01",
+      "category": "OTHER",
+      "tag": "TEST_EQUIPMENT",
+      "quantity_basis": "INSTANCE",
+      "included": true,
+      "exclude_reason": null,
+      "visibility": {
+        "tag_visible": true,
+        "hidden": false
+      },
+      "metrics": {
+        "area_m2": null,
+        "volume_m3": null,
+        "length_m": null,
+        "count": {
+          "value": 1,
+          "centroid_world_m": [
+            2,
+            0,
+            0
+          ],
+          "quantity_method": "INSTANCE_ONE",
+          "centroid_method": "USER_POINT",
+          "quality": "USER_SPECIFIED",
+          "assumptions": [
+            "개발 검수용 가상 형상과 균일 밀도. USER_POINT는 테스트 설계에서 지정한 점이며 실제 제조사 자료가 아님."
+          ]
+        }
+      },
+      "bounds_world_m": {
+        "max": [
+          2.5,
+          0.5,
+          0.5
+        ],
+        "min": [
+          1.5,
+          -0.5,
+          -0.5
+        ]
+      }
+    }
+  ],
+  "diagnostics": []
+}

@@ -1,0 +1,86 @@
+{
+  "mappings": [
+    {
+      "material_version_id": "test-0-v1",
+      "tag": "TEST_BEAM"
+    },
+    {
+      "material_version_id": "test-1-v1",
+      "tag": "TEST_BOARD"
+    },
+    {
+      "material_version_id": "test-2-v1",
+      "tag": "TEST_BLOCK"
+    },
+    {
+      "material_version_id": "test-3-v1",
+      "tag": "TEST_EQUIPMENT"
+    }
+  ],
+  "materials": [
+    {
+      "quality": "ESTIMATED",
+      "calc_type": "LENGTH",
+      "source_date": "2026-09-08",
+      "unit_weight": 10,
+      "specification": "검수용 가상 값",
+      "unit": "kg/m",
+      "source": "개발 명세 AT-01~05. 실무 사용 금지",
+      "version_id": "test-0-v1",
+      "material_id": "test-0",
+      "name": "시험 보"
+    },
+    {
+      "quality": "ESTIMATED",
+      "calc_type": "AREA",
+      "source_date": "2026-09-08",
+      "unit_weight": 5,
+      "specification": "검수용 가상 값",
+      "unit": "kg/m2",
+      "source": "개발 명세 AT-01~05. 실무 사용 금지",
+      "version_id": "test-1-v1",
+      "material_id": "test-1",
+      "name": "시험 보드"
+    },
+    {
+      "quality": "ESTIMATED",
+      "calc_type": "VOLUME",
+      "source_date": "2026-09-08",
+      "unit_weight": 1000,
+      "specification": "검수용 가상 값",
+      "unit": "kg/m3",
+      "source": "개발 명세 AT-01~05. 실무 사용 금지",
+      "version_id": "test-2-v1",
+      "material_id": "test-2",
+      "name": "시험 블록"
+    },
+    {
+      "quality": "ESTIMATED",
+      "calc_type": "COUNT",
+      "source_date": "2026-09-08",
+      "unit_weight": 50,
+      "specification": "검수용 가상 값",
+      "unit": "kg/EA",
+      "source": "개발 명세 AT-01~05. 실무 사용 금지",
+      "version_id": "test-3-v1",
+      "material_id": "test-3",
+      "name": "시험 장비"
+    }
+  ],
+  "fixture_version": "1.0.0",
+  "expected": {
+    "centroid_world_m": [
+      0.6,
+      0.15,
+      0.5
+    ],
+    "total_mass_kg": 200,
+    "element_mass_kg": [
+      20,
+      30,
+      100,
+      50
+    ],
+    "status": "ESTIMATED"
+  }
+}

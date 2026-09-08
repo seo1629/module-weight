@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>모듈러 중량 산출</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <strong class="brand">모듈러 중량 산출</strong>
+      <span class="sep">/</span>
+      <span id="projectNameLabel">새 프로젝트</span>
+      <span id="revisionBadge" class="badge badge-draft">DRAFT</span>
+    </div>
+    <div class="topbar-mid">
+      <label class="inline-field">
+        모듈 범위
+        <select id="moduleFilterSelect"><option value="ALL">전체 모듈</option></select>
+      </label>
+      <label class="inline-field">
+        단위
+        <select id="unitDisplaySelect">
+          <option value="kg">kg</option>
+          <option value="ton">ton</option>
+        </select>
+      </label>
+    </div>
+    <div class="topbar-right">
+      <a href="#" id="unresolvedLink" class="unresolved-link" hidden>미해결 0건</a>
+      <span id="saveStatus" class="save-status">-</span>
+    </div>
+  </header>
+
+  <div class="body-shell">
+    <nav class="sidenav" id="sidenav">
+      <button class="nav-item active" data-tab="import">업로드·검증</button>
+      <button class="nav-item" data-tab="dashboard">중량 대시보드</button>
+      <button class="nav-item" data-tab="elements">부재 목록</button>
+      <button class="nav-item" data-tab="cg">무게중심</button>
+      <button class="nav-item" data-tab="manual">수동 중량</button>
+      <button class="nav-item" data-tab="materials">자재 DB</button>
+      <button class="nav-item" data-tab="reports">보고서·이력</button>
+    </nav>
+
+    <main class="content" id="content">
+
+      <!-- MW-02/03 combined: 업로드 · 검증 · Tag 매핑 -->
+      <section class="tab-panel" id="tab-import">
+        <h1>업로드 · 검증 · Tag 매핑</h1>
+        <p class="hint">SketchUp Exporter가 만든 Export JSON을 업로드합니다. 업로드는 모델 스냅샷 전체 교체이며, 단중과 최종 중량은 이 파일에 없습니다.</p>
+
+        <div class="card upload-card">
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept=".json,application/json" hidden />
+            <div>
+              <p><strong>Export JSON 파일을 여기로 끌어놓거나</strong></p>
+              <button class="btn" id="pickFileBtn">파일 선택</button>
+              <button class="btn btn-ghost" id="loadDemoBtn">데모 불러오기</button>
+            </div>
+            <p class="dz-note">.json, 최대 20MB / 50,000 PART 목표 (성능 검증 전)</p>
+          </div>
+          <div id="importSummary" class="import-summary" hidden></div>
+        </div>
+
+        <div class="card" id="validationCard" hidden>
+          <div class="card-head">
+            <h2>검증 결과</h2>
+            <div class="tabbar">
+              <button class="tabbar-btn active" data-vtab="errors">오류 <span id="errCount">0</span></button>
+              <button class="tabbar-btn" data-vtab="warnings">경고 <span id="warnCount">0</span></button>
+              <button class="tabbar-btn" data-vtab="mapping">Tag 매핑</button>
+            </div>
+          </div>
+          <div class="vtab-panel" id="vtab-errors"></div>
+          <div class="vtab-panel" id="vtab-warnings" hidden></div>
+          <div class="vtab-panel" id="vtab-mapping" hidden></div>
+        </div>
+      </section>
+
+      <!-- MW-05 -->
+      <section class="tab-panel" id="tab-dashboard" hidden>
+        <h1>중량 대시보드</h1>
+        <div id="dashboardEmpty" class="empty-state">업로드된 데이터가 없습니다. ‘업로드·검증’ 탭에서 Export JSON을 불러오세요.</div>
+        <div id="dashboardBody" hidden>
+          <div class="status-strip">
+            <span id="statusPill" class="status-pill">-</span>
+            <span id="statusNote" class="status-note"></span>
+          </div>
+          <div class="card-row">
+            <div class="card metric-card">
+              <div class="metric-label">총중량 / 유효 소계</div>
+              <div class="metric-value" id="totalMassValue">—</div>
+              <div class="metric-sub" id="totalMassSub"></div>
+            </div>
+            <div class="card metric-card">
+              <div class="metric-label">포함 / 제외 / 미산출</div>
+              <div class="metric-value" id="countsValue">—</div>
+            </div>
+            <div class="card metric-card">
+              <div class="metric-label">무게중심 (CG)</div>
+              <div class="metric-value" id="cgValue">—</div>
+              <div class="metric-sub" id="cgSub"></div>
+            </div>
+          </div>
+          <div class="card-row">
+            <div class="card chart-card">
+              <h3>모듈별 중량</h3>
+              <div id="chartByModule" class="bar-chart"></div>
+            </div>
+            <div class="card chart-card">
+              <h3>공종별 중량</h3>
+              <div id="chartByCategory" class="bar-chart"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>자재 집계</h3>
+            <div class="table-wrap"><table class="data-table" id="materialAggTable">
+              <thead><tr><th>자재</th><th>계산유형</th><th>물량</th><th>단위</th><th>중량(kg)</th><th>비율</th></tr></thead>
+              <tbody></tbody>
+            </table></div>
+          </div>
+          <div class="card confirm-card">
+            <h3>결과 확정</h3>
+            <p class="hint">확정 전 산출 버전, 단중 출처, 제외/추정 목록을 확인하세요. 확정본은 이후 자재 DB 변경의 영향을 받지 않습니다.</p>
+            <button class="btn btn-primary" id="fixResultBtn">이 산출을 확정</button>
+            <span id="fixResultMsg" class="hint"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- MW-06/07 -->
+      <section class="tab-panel" id="tab-elements" hidden>
+        <h1>부재 목록</h1>
+        <div class="toolbar">
+          <input type="text" id="elementSearch" placeholder="부재명, Tag, 경로 검색" />
+          <select id="elementCategoryFilter"><option value="">공종 전체</option></select>
+          <select id="elementStatusFilter">
+            <option value="">상태 전체</option>
+            <option value="OK">산출됨</option>
+            <option value="UNRESOLVED">미산출</option>
+            <option value="EXCLUDED">제외</option>
+            <option value="ESTIMATED">추정</option>
+          </select>
+          <button class="btn btn-ghost" id="exportElementsCsvBtn">CSV 다운로드 (표시 행)</button>
+          <span class="hint" id="elementsSubtotal"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="elementsTable">
+            <thead><tr>
+              <th>부재명</th><th>모듈</th><th>공종</th><th>Tag</th><th>계산유형</th>
+              <th>물량</th><th>단중</th><th>중량(kg)</th><th>중심 품질</th><th>상태</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="side-panel" id="elementDetailPanel" hidden></div>
+      </section>
+
+      <!-- MW-08 -->
+      <section class="tab-panel" id="tab-cg" hidden>
+        <h1>무게중심 (CG)</h1>
+        <div id="cgEmpty" class="empty-state">업로드된 데이터가 없습니다.</div>
+        <div id="cgBody" hidden>
+          <div class="cg-coord-card card">
+            <div><span class="k">질량</span><span class="v" id="cgMass">—</span></div>
+            <div><span class="k">Cx</span><span class="v" id="cgX">—</span></div>
+            <div><span class="k">Cy</span><span class="v" id="cgY">—</span></div>
+            <div><span class="k">Cz</span><span class="v" id="cgZ">—</span></div>
+            <div><span class="k">품질</span><span class="v" id="cgQuality">—</span></div>
+          </div>
+          <div class="card-row">
+            <div class="card"><h3>평면 XY</h3><svg id="svgPlanXY" viewBox="0 0 300 300"></svg></div>
+            <div class="card"><h3>정면 XZ</h3><svg id="svgFrontXZ" viewBox="0 0 300 300"></svg></div>
+            <div class="card"><h3>측면 YZ</h3><svg id="svgSideYZ" viewBox="0 0 300 300"></svg></div>
+          </div>
+          <div class="card">
+            <h3>추정 / 누락 목록</h3>
+            <div class="table-wrap"><table class="data-table" id="cgIssueTable">
+              <thead><tr><th>부재/항목</th><th>사유</th><th>중심 방법</th></tr></thead>
+              <tbody></tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MW-09 -->
+      <section class="tab-panel" id="tab-manual" hidden>
+        <h1>수동 추가 중량</h1>
+        <p class="hint">모델링하지 않은 실제 설치 중량을 보완합니다. 위치를 입력하지 않으면 전체 CG는 계산 불가(CG_INCOMPLETE) 상태가 됩니다.</p>
+        <div class="card">
+          <h3>항목 추가</h3>
+          <form id="manualForm" class="form-grid">
+            <label>이름<input type="text" id="mName" required /></label>
+            <label>모듈<select id="mModule" required></select></label>
+            <label>공종<select id="mCategory" required></select></label>
+            <label>중량(kg)<input type="number" id="mMass" min="0" step="any" required /></label>
+            <label>X(m)<input type="number" id="mX" step="any" /></label>
+            <label>Y(m)<input type="number" id="mY" step="any" /></label>
+            <label>Z(m)<input type="number" id="mZ" step="any" /></label>
+            <label>출처<input type="text" id="mSource" required /></label>
+            <label class="span2">사유<input type="text" id="mReason" required /></label>
+            <div class="span2"><button type="submit" class="btn btn-primary">추가</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>항목 목록</h3>
+          <div class="table-wrap"><table class="data-table" id="manualTable">
+            <thead><tr><th>이름</th><th>모듈</th><th>공종</th><th>중량(kg)</th><th>위치</th><th>출처/사유</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <p class="hint" id="manualSummary"></p>
+        </div>
+      </section>
+
+      <!-- MW-04 -->
+      <section class="tab-panel" id="tab-materials" hidden>
+        <h1>자재 DB</h1>
+        <p class="hint">샘플/테스트 단중 값은 실무 기본값이 아닙니다. 각 자재의 출처와 기준일을 확인하세요.</p>
+        <div class="card">
+          <h3>자재 추가/수정 (저장 시 새 버전 생성)</h3>
+          <form id="materialForm" class="form-grid">
+            <input type="hidden" id="matEditingId" />
+            <label>이름<input type="text" id="matName" required /></label>
+            <label>규격<input type="text" id="matSpec" /></label>
+            <label>계산유형
+              <select id="matCalcType" required>
+                <option value="AREA">AREA</option>
+                <option value="VOLUME">VOLUME</option>
+                <option value="LENGTH">LENGTH</option>
+                <option value="COUNT">COUNT</option>
+              </select>
+            </label>
+            <label id="matModeLabel">입력 방식
+              <select id="matMode">
+                <option value="DIRECT">직접 단중</option>
+                <option value="DENSITY_THICKNESS">밀도×두께 (AREA)</option>
+              </select>
+            </label>
+            <label id="matDensityField" hidden>밀도(kg/m3)<input type="number" id="matDensity" step="any" /></label>
+            <label id="matThicknessField" hidden>두께(m)<input type="number" id="matThickness" step="any" /></label>
+            <label id="matWeightField">단중<input type="number" id="matWeight" step="any" min="0" /></label>
+            <label>단위<input type="text" id="matUnit" readonly /></label>
+            <label>품질
+              <select id="matQuality">
+                <option value="VERIFIED">VERIFIED</option>
+                <option value="ESTIMATED">ESTIMATED</option>
+              </select>
+            </label>
+            <label class="span2">출처<input type="text" id="matSource" required /></label>
+            <label>기준일<input type="date" id="matSourceDate" required /></label>
+            <label class="span2" id="matEstimateReasonField" hidden>추정 사유<input type="text" id="matEstimateReason" /></label>
+            <div class="span2"><button type="submit" class="btn btn-primary">저장 (새 버전)</button>
+              <button type="button" class="btn btn-ghost" id="matCancelEditBtn" hidden>편집 취소</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>자재 목록</h3>
+          <div class="table-wrap"><table class="data-table" id="materialsTable">
+            <thead><tr><th>이름</th><th>규격</th><th>유형</th><th>단중</th><th>단위</th><th>품질</th><th>출처</th><th>버전</th><th>상태</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </section>
+
+      <!-- MW-10 -->
+      <section class="tab-panel" id="tab-reports" hidden>
+        <h1>보고서 · 산출 이력</h1>
+        <div class="card" id="reportPrintArea">
+          <div class="report-header">
+            <h2 id="reportTitle">모듈러 중량 산출 보고서</h2>
+            <p id="reportMeta" class="hint"></p>
+          </div>
+          <div id="reportBody"></div>
+        </div>
+        <div class="card no-print">
+          <h3>다운로드</h3>
+          <label class="inline-field">보고서 제목 <input type="text" id="reportTitleInput" value="모듈러 중량 산출 보고서" /></label>
+          <label class="inline-field">검토자 <input type="text" id="reportReviewer" /></label>
+          <label class="inline-field">비고 <input type="text" id="reportNote" /></label>
+          <div class="btn-row">
+            <button class="btn" id="downloadCsvBtn">CSV 다운로드 (전체)</button>
+            <button class="btn" id="downloadJsonBtn">계산 근거 JSON 다운로드</button>
+            <button class="btn" id="printReportBtn">인쇄</button>
+            <button class="btn btn-ghost" id="backupExportBtn">프로젝트 백업 내보내기</button>
+            <label class="btn btn-ghost file-btn">백업 가져오기<input type="file" id="backupImportInput" accept=".json" hidden /></label>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
