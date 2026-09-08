@@ -248,14 +248,24 @@
               </select>
             </label>
             <label id="matModeLabel">입력 방식
-              <select id="matMode">
-                <option value="DIRECT">직접 단중</option>
-                <option value="DENSITY_THICKNESS">밀도×두께 (AREA)</option>
+              <select id="matMode"></select>
+            </label>
+            <label id="matDensityField" hidden>밀도 또는 비중 값<input type="number" id="matDensity" step="any" min="0" /></label>
+            <label id="matDensityUnitField" hidden>밀도/비중 단위
+              <select id="matDensityUnit">
+                <option value="kg/m3">kg/m³ (밀도)</option>
+                <option value="SG">비중 (SG, 물=1 기준)</option>
               </select>
             </label>
-            <label id="matDensityField" hidden>밀도(kg/m3)<input type="number" id="matDensity" step="any" /></label>
-            <label id="matThicknessField" hidden>두께(m)<input type="number" id="matThickness" step="any" /></label>
+            <label id="matThicknessField" hidden>두께(m)<input type="number" id="matThickness" step="any" min="0" /></label>
+            <label id="matSgField" hidden>비중 (SG, 물=1 기준)<input type="number" id="matSg" step="any" min="0" /></label>
             <label id="matWeightField">단중<input type="number" id="matWeight" step="any" min="0" /></label>
+            <label id="matWeightUnitField" hidden>단중 단위
+              <select id="matWeightUnit">
+                <option value="kg/m2">kg/m²</option>
+                <option value="g/cm2">g/cm²</option>
+              </select>
+            </label>
             <label>단위<input type="text" id="matUnit" readonly /></label>
             <label>품질
               <select id="matQuality">

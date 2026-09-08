@@ -70,7 +70,7 @@ function defaultState() {
     overrides: {}, // element_id -> {excluded, reason}
     manualMasses: [], // {id, name, module_id, category, mass_kg, x,y,z(or null), source, reason}
     selectedModuleId: 'ALL',
-    unitDisplay: 'kg',
+    unitDisplay: 'ton',
     fixedSnapshot: null, // {fixedAt, totals, cg, status, elementCount}
     warningAcks: {}, // tag/element key -> true
   };
@@ -992,14 +992,45 @@ function renderReports() {
   `;
 }
 
+const MAT_MODE_OPTIONS = {
+  AREA: [
+    ['DIRECT', '직접 단중'],
+    ['DENSITY_THICKNESS', '밀도(비중) × 두께'],
+  ],
+  VOLUME: [
+    ['DIRECT', '직접 단중'],
+    ['SG', '비중으로 입력'],
+  ],
+  LENGTH: [['DIRECT', '직접 단중']],
+  COUNT: [['DIRECT', '직접 단중']],
+};
+
+function rebuildMaterialModeOptions() {
+  const calcType = document.getElementById('matCalcType').value;
+  const sel = document.getElementById('matMode');
+  const prev = sel.value;
+  const opts = MAT_MODE_OPTIONS[calcType] || MAT_MODE_OPTIONS.LENGTH;
+  sel.innerHTML = opts.map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
+  if (opts.some(([v]) => v === prev)) sel.value = prev;
+}
+
 function updateMaterialFormUnit() {
+  rebuildMaterialModeOptions();
   const calcType = document.getElementById('matCalcType').value;
   document.getElementById('matUnit').value = UNIT_BY_TYPE[calcType];
   const mode = document.getElementById('matMode').value;
-  document.getElementById('matModeLabel').hidden = calcType !== 'AREA';
-  document.getElementById('matDensityField').hidden = !(calcType === 'AREA' && mode === 'DENSITY_THICKNESS');
-  document.getElementById('matThicknessField').hidden = !(calcType === 'AREA' && mode === 'DENSITY_THICKNESS');
-  document.getElementById('matWeightField').hidden = calcType === 'AREA' && mode === 'DENSITY_THICKNESS';
+
+  document.getElementById('matModeLabel').hidden = calcType === 'LENGTH' || calcType === 'COUNT';
+
+  const isAreaDensity = calcType === 'AREA' && mode === 'DENSITY_THICKNESS';
+  const isVolumeSg = calcType === 'VOLUME' && mode === 'SG';
+
+  document.getElementById('matDensityField').hidden = !isAreaDensity;
+  document.getElementById('matDensityUnitField').hidden = !isAreaDensity;
+  document.getElementById('matThicknessField').hidden = !isAreaDensity;
+  document.getElementById('matSgField').hidden = !isVolumeSg;
+  document.getElementById('matWeightField').hidden = isAreaDensity || isVolumeSg;
+  document.getElementById('matWeightUnitField').hidden = !(calcType === 'AREA' && mode === 'DIRECT');
 }
 
 // ---------------------------------------------------------------------------
@@ -1235,13 +1266,25 @@ function bindMaterials() {
     let unitWeight;
     let thickness = null, density = null;
     if (calcType === 'AREA' && mode === 'DENSITY_THICKNESS') {
-      density = parseFloat(document.getElementById('matDensity').value);
+      const rawDensity = parseFloat(document.getElementById('matDensity').value);
+      const densityUnit = document.getElementById('matDensityUnit').value; // kg/m3 | SG
       thickness = parseFloat(document.getElementById('matThickness').value);
-      if (!(density > 0) || !(thickness > 0)) { alert('밀도와 두께는 0보다 커야 합니다.'); return; }
+      if (!(rawDensity > 0) || !(thickness > 0)) { alert('밀도(비중)와 두께는 0보다 커야 합니다.'); return; }
+      density = densityUnit === 'SG' ? rawDensity * 1000 : rawDensity; // 비중(SG) × 1000 = kg/m3
       unitWeight = density * thickness;
+    } else if (calcType === 'VOLUME' && mode === 'SG') {
+      const sg = parseFloat(document.getElementById('matSg').value);
+      if (!(sg > 0)) { alert('비중은 0보다 커야 합니다.'); return; }
+      unitWeight = sg * 1000; // 비중(SG) × 1000 = kg/m3
     } else {
-      unitWeight = parseFloat(document.getElementById('matWeight').value);
-      if (!(unitWeight > 0)) { alert('단중은 0보다 커야 합니다.'); return; }
+      const rawWeight = parseFloat(document.getElementById('matWeight').value);
+      if (!(rawWeight > 0)) { alert('단중은 0보다 커야 합니다.'); return; }
+      if (calcType === 'AREA') {
+        const weightUnit = document.getElementById('matWeightUnit').value; // kg/m2 | g/cm2
+        unitWeight = weightUnit === 'g/cm2' ? rawWeight * 10 : rawWeight; // 1 g/cm2 = 10 kg/m2
+      } else {
+        unitWeight = rawWeight;
+      }
     }
     const name = document.getElementById('matName').value.trim();
     const source = document.getElementById('matSource').value.trim();
