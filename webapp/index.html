@@ -220,6 +220,19 @@
       <section class="tab-panel" id="tab-materials" hidden>
         <h1>자재 DB</h1>
         <p class="hint">샘플/테스트 단중 값은 실무 기본값이 아닙니다. 각 자재의 출처와 기준일을 확인하세요.</p>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>표준 Tag 카탈로그</h2>
+          </div>
+          <p class="hint">SketchUp에서 부재에 지정할 Tag 명명 예시와 참고 단중입니다. 모두 이론값(단면적×밀도, 밀도×두께) 또는 카탈로그 예시이며 <strong>실제 프로젝트에는 검증된 제조사 자료·구조계산서로 교체해야 합니다.</strong> 아래에서 일괄 추가하면 각 Tag에 자동 매핑됩니다.</p>
+          <div class="table-wrap"><table class="data-table" id="catalogTable">
+            <thead><tr><th>공종</th><th>Tag</th><th>자재명</th><th>계산유형</th><th>참고 단중</th><th>근거</th><th>상태</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="btn-row"><button class="btn btn-primary" id="loadCatalogBtn">카탈로그 자재 일괄 추가 + Tag 매핑</button></div>
+        </div>
+
         <div class="card">
           <h3>자재 추가/수정 (저장 시 새 버전 생성)</h3>
           <form id="materialForm" class="form-grid">

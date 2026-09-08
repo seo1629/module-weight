@@ -31,6 +31,14 @@ const CALC_TYPE_BY_BASIS = {
   AXIS_ENDPOINTS: 'LENGTH',
   INSTANCE: 'COUNT',
 };
+// 명세 6.2 quantity_method 허용값: quantity_basis마다 정확히 하나만 허용된다.
+const QUANTITY_METHOD_BY_BASIS = {
+  REFERENCE_FACES: 'TRANSFORMED_REFERENCE_FACES',
+  SOLID: 'CLOSED_MESH_INTEGRAL',
+  AXIS_ENDPOINTS: 'TRANSFORMED_AXIS_ENDPOINTS',
+  INSTANCE: 'INSTANCE_ONE',
+};
+const CENTROID_METHODS = ['AREA_WEIGHTED', 'VOLUME_INTEGRAL', 'AXIS_MIDPOINT', 'USER_POINT', 'BBOX_CENTER', 'UNAVAILABLE'];
 const TAG_RE = /^[A-Z][A-Z0-9_.]*$/;
 const STATUS_ORDER = ['BLOCKED', 'EMPTY', 'INCOMPLETE', 'CG_INCOMPLETE', 'ESTIMATED', 'VALID'];
 const STATUS_LABEL = {
@@ -225,10 +233,19 @@ function validateExportJson(json) {
         warn('MISSING_METRIC', `quantity_basis(${el.quantity_basis})에 해당하는 metric이 없습니다.`, el.id, el.module_id);
       } else if (metric) {
         if (!(typeof metric.value === 'number' && Number.isFinite(metric.value) && metric.value > 0)) {
-          warn('INVALID_UNIT_WEIGHT', '물량 value가 유한 양수가 아닙니다.', el.id, el.module_id);
+          warn('DEGENERATE_GEOMETRY', '물량 value가 유한 양수가 아닙니다. (형상 재확인 필요)', el.id, el.module_id);
         }
         if (metricKey === 'count' && !Number.isInteger(metric.value)) {
-          warn('INVALID_UNIT_WEIGHT', 'COUNT 물량이 정수가 아닙니다.', el.id, el.module_id);
+          warn('DEGENERATE_GEOMETRY', 'COUNT 물량이 정수가 아닙니다. (형상 재확인 필요)', el.id, el.module_id);
+        }
+        if (metric.quantity_method !== QUANTITY_METHOD_BY_BASIS[el.quantity_basis]) {
+          warn('BASIS_MISMATCH', `quantity_method(${metric.quantity_method})가 quantity_basis(${el.quantity_basis})의 허용값(${QUANTITY_METHOD_BY_BASIS[el.quantity_basis]})과 다릅니다.`, el.id, el.module_id);
+        }
+        if (!CENTROID_METHODS.includes(metric.centroid_method)) {
+          warn('UNCLASSIFIED', `알 수 없는 centroid_method: ${metric.centroid_method}`, el.id, el.module_id);
+        }
+        if (metric.centroid_method === 'BBOX_CENTER' && metric.quality !== 'ESTIMATED') {
+          warn('ESTIMATED_CENTROID', 'centroid_method=BBOX_CENTER이면 quality=ESTIMATED이어야 합니다 (명세 6.2).', el.id, el.module_id);
         }
         if (metric.centroid_method === 'UNAVAILABLE' && metric.centroid_world_m !== null) {
           warn('UNCLASSIFIED', 'centroid_method=UNAVAILABLE인데 centroid 값이 존재합니다.', el.id, el.module_id);
@@ -260,6 +277,98 @@ function seedMaterialsFromFixture(fixture) {
   const mappings = {};
   for (const map of fixture.mappings) mappings[map.tag] = map.material_version_id;
   return { materials, mappings };
+}
+
+// ---------------------------------------------------------------------------
+// 2.1 표준 Tag 카탈로그 (참고용) — SketchUp에서 자주 쓰는 Tag 명명 예시와 참고 단중.
+// 모두 이론값(단면적×밀도, 밀도×두께) 또는 카탈로그 예시이며 실제 프로젝트에는
+// 검증된 제조사 자료·구조계산서로 교체해야 한다. 1.2절 Tag 규칙(^[A-Z][A-Z0-9_.]*$)을 따른다.
+// ---------------------------------------------------------------------------
+const DEFAULT_MATERIAL_CATALOG = [
+  // --- STRUCTURE (강재, 밀도 7,850 kg/m³ 기준 이론값) ---
+  { tag: 'ST_HSS_75X75X3.2', category: 'STRUCTURE', name: '각형강관 75x75x3.2T', calc_type: 'LENGTH',
+    unit_weight: 7.2, specification: 'KS D 3568 상당, t=3.2mm',
+    source: '이론값 = 단면적(4t(a-t))×7,850kg/m³. KS 규격표 대조 필요', quality: 'ESTIMATED' },
+  { tag: 'ST_HSS_100X100X4.5', category: 'STRUCTURE', name: '각형강관 100x100x4.5T', calc_type: 'LENGTH',
+    unit_weight: 13.5, specification: 'KS D 3568 상당, t=4.5mm',
+    source: '이론값 = 단면적(4t(a-t))×7,850kg/m³. KS 규격표 대조 필요', quality: 'ESTIMATED' },
+  { tag: 'ST_HSS_150X100X4.5', category: 'STRUCTURE', name: '각형강관 150x100x4.5T', calc_type: 'LENGTH',
+    unit_weight: 17.0, specification: 'KS D 3568 상당, t=4.5mm',
+    source: '이론값 = 단면적(2t((a-t)+(b-t)))×7,850kg/m³. KS 규격표 대조 필요', quality: 'ESTIMATED' },
+  { tag: 'ST_PLATE_6', category: 'STRUCTURE', name: '강판 6T', calc_type: 'AREA',
+    unit_weight: 47.1, specification: 't=6mm', density_kg_m3: 7850, thickness_m: 0.006,
+    source: '밀도×두께 = 7,850×0.006 (명세 2.3 예시값)', quality: 'ESTIMATED' },
+  { tag: 'ST_PLATE_9', category: 'STRUCTURE', name: '강판 9T', calc_type: 'AREA',
+    unit_weight: 70.7, specification: 't=9mm', density_kg_m3: 7850, thickness_m: 0.009,
+    source: '밀도×두께 = 7,850×0.009', quality: 'ESTIMATED' },
+
+  // --- FLOOR ---
+  { tag: 'BD_CEMENT_18', category: 'FLOOR', name: '시멘트보드 18T', calc_type: 'AREA',
+    unit_weight: 21.6, specification: 't=18mm, 밀도 1,200kg/m³ 가정(제품별 1,000~1,800 편차)',
+    density_kg_m3: 1200, thickness_m: 0.018,
+    source: '밀도×두께 참고값 — 제품 스펙시트로 밀도 확인 필수', quality: 'ESTIMATED' },
+  { tag: 'FL_DECK_1.2T', category: 'FLOOR', name: '데크플레이트 1.2T (예시)', calc_type: 'AREA',
+    unit_weight: 13.0, specification: 't=1.2mm, 리브 형상 포함 카탈로그 예시',
+    source: '제조사 카탈로그 예시값(미확인) — 실제 제품 규격표로 교체 필수', quality: 'ESTIMATED' },
+
+  // --- WALL ---
+  { tag: 'BD_GYPSUM_9.5', category: 'WALL', name: '석고보드 9.5T', calc_type: 'AREA',
+    unit_weight: 7.1, specification: 't=9.5mm, 밀도 750kg/m³ 가정', density_kg_m3: 750, thickness_m: 0.0095,
+    source: '밀도×두께 참고값 (KS F 3504 일반석고보드 밀도 추정)', quality: 'ESTIMATED' },
+  { tag: 'BD_GYPSUM_12.5', category: 'WALL', name: '석고보드 12.5T', calc_type: 'AREA',
+    unit_weight: 9.4, specification: 't=12.5mm, 밀도 750kg/m³ 가정', density_kg_m3: 750, thickness_m: 0.0125,
+    source: '밀도×두께 참고값 (KS F 3504 일반석고보드 밀도 추정)', quality: 'ESTIMATED' },
+  { tag: 'INS_GW_100', category: 'WALL', name: '글라스울 단열재 100T (24K)', calc_type: 'AREA',
+    unit_weight: 2.4, specification: 't=100mm, 밀도 24kg/m³(24K)', density_kg_m3: 24, thickness_m: 0.1,
+    source: '밀도×두께 참고값 — 제품 등급(K값)별 밀도 확인 필수', quality: 'ESTIMATED' },
+  { tag: 'INS_XPS_50', category: 'WALL', name: '압출법 보온판(XPS) 50T', calc_type: 'AREA',
+    unit_weight: 1.5, specification: 't=50mm, 밀도 30kg/m³ 가정', density_kg_m3: 30, thickness_m: 0.05,
+    source: '밀도×두께 참고값 — 제품 등급별 밀도 확인 필수', quality: 'ESTIMATED' },
+
+  // --- CEILING ---
+  { tag: 'BD_MTILE_15', category: 'CEILING', name: '미네랄 텍스 천장재 15T', calc_type: 'AREA',
+    unit_weight: 5.3, specification: 't=15mm, 밀도 350kg/m³ 가정', density_kg_m3: 350, thickness_m: 0.015,
+    source: '밀도×두께 참고값 — 제품 스펙시트로 밀도 확인 필수', quality: 'ESTIMATED' },
+
+  // --- OPENING (제품별 편차가 매우 크므로 반드시 실 제품 스펙으로 교체) ---
+  { tag: 'OP_WINDOW_STD', category: 'OPENING', name: '시스템창호 세트 (예시)', calc_type: 'COUNT',
+    unit_weight: 35, specification: '규격/유리 사양에 따라 편차 큼',
+    source: '제품 카탈로그 미확인 임시값 — 실제 사용 전 반드시 교체', quality: 'ESTIMATED' },
+  { tag: 'OP_DOOR_STD', category: 'OPENING', name: '도어 세트 (예시)', calc_type: 'COUNT',
+    unit_weight: 28, specification: '방화/방음 사양에 따라 편차 큼',
+    source: '제품 카탈로그 미확인 임시값 — 실제 사용 전 반드시 교체', quality: 'ESTIMATED' },
+
+  // --- MEP (제품별 편차가 매우 크므로 반드시 실 제품 스펙으로 교체) ---
+  { tag: 'MEP_FCU_STD', category: 'MEP', name: 'FCU(팬코일유닛) 표준형 (예시)', calc_type: 'COUNT',
+    unit_weight: 32, specification: '용량/모델별 편차 큼',
+    source: '제조사 카탈로그 미확인 임시값 — 실제 사용 전 반드시 교체', quality: 'ESTIMATED' },
+  { tag: 'MEP_PANEL_STD', category: 'MEP', name: '분전반 (예시)', calc_type: 'COUNT',
+    unit_weight: 18, specification: '회로 수/용량별 편차 큼',
+    source: '제조사 카탈로그 미확인 임시값 — 실제 사용 전 반드시 교체', quality: 'ESTIMATED' },
+];
+
+function buildCatalogMaterials() {
+  const today = new Date().toISOString().slice(0, 10);
+  return DEFAULT_MATERIAL_CATALOG.map((c) => {
+    const material_id = 'catalog-' + c.tag.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return {
+      material_id,
+      version_id: material_id + '-v' + Date.now().toString(36),
+      name: c.name,
+      specification: c.specification,
+      calc_type: c.calc_type,
+      unit_weight: c.unit_weight,
+      unit: UNIT_BY_TYPE[c.calc_type],
+      source: c.source,
+      source_date: today,
+      quality: c.quality,
+      estimate_reason: c.quality === 'ESTIMATED' ? '표준 Tag 카탈로그 참고값 — 실제 제품/구조계산 자료로 교체 필요' : null,
+      thickness_m: c.thickness_m || null,
+      density_kg_m3: c.density_kg_m3 || null,
+      active: true,
+      catalog_tag: c.tag,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -320,12 +429,14 @@ function resolveElement(el, materialsByVersion, mappings, overrides) {
     return result;
   }
 
+  // 물량(metric.value) 자체가 유효하지 않은 것은 형상 문제이므로 DEGENERATE_GEOMETRY로 구분한다.
+  // INVALID_UNIT_WEIGHT는 명세 6.4 표대로 자재 DB의 단중 문제에만 사용한다.
   if (!(typeof metric.value === 'number' && Number.isFinite(metric.value) && metric.value > 0)) {
-    result.issues.push('INVALID_UNIT_WEIGHT');
+    result.issues.push('DEGENERATE_GEOMETRY');
     return result;
   }
   if (basisKey === 'count' && !Number.isInteger(metric.value)) {
-    result.issues.push('INVALID_UNIT_WEIGHT');
+    result.issues.push('DEGENERATE_GEOMETRY');
     return result;
   }
   if (!(typeof material.unit_weight === 'number' && Number.isFinite(material.unit_weight) && material.unit_weight > 0)) {
@@ -824,8 +935,23 @@ function renderManual() {
   document.getElementById('manualSummary').textContent = `합계 ${fmtMass(totalManual)} · 위치 누락 ${missingLoc}건`;
 }
 
+function renderCatalogTable() {
+  const loadedTags = new Set(state.materials.filter((m) => m.catalog_tag).map((m) => m.catalog_tag));
+  const tbody = document.querySelector('#catalogTable tbody');
+  tbody.innerHTML = DEFAULT_MATERIAL_CATALOG.map((c) => `<tr>
+    <td>${escapeHtml(c.category)}</td>
+    <td class="tag-mono">${escapeHtml(c.tag)}</td>
+    <td>${escapeHtml(c.name)}</td>
+    <td>${c.calc_type}</td>
+    <td>${c.unit_weight} ${escapeHtml(UNIT_BY_TYPE[c.calc_type])}</td>
+    <td class="hint">${escapeHtml(c.source)}</td>
+    <td>${loadedTags.has(c.tag) ? '<span class="badge-status badge-ok">추가됨</span>' : '<span class="hint">미추가</span>'}</td>
+  </tr>`).join('');
+}
+
 function renderMaterials() {
   updateMaterialFormUnit();
+  renderCatalogTable();
   const tbody = document.querySelector('#materialsTable tbody');
   tbody.innerHTML = state.materials.map((m) => `<tr>
     <td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.specification || '-')}</td><td>${m.calc_type}</td>
@@ -1083,6 +1209,19 @@ function bindManual() {
 }
 
 function bindMaterials() {
+  document.getElementById('loadCatalogBtn').addEventListener('click', () => {
+    const already = new Set(state.materials.filter((m) => m.catalog_tag).map((m) => m.catalog_tag));
+    const toAdd = DEFAULT_MATERIAL_CATALOG.filter((c) => !already.has(c.tag));
+    if (!toAdd.length) { alert('이미 모든 카탈로그 자재가 추가되어 있습니다.'); return; }
+    if (!confirm(`카탈로그 자재 ${toAdd.length}개를 추가하고 해당 Tag에 자동 매핑합니다.\n모두 참고용 추정치이며 실제 프로젝트에는 검증된 자료로 교체해야 합니다. 계속하시겠습니까?`)) return;
+    const materials = buildCatalogMaterials().filter((m) => toAdd.some((c) => c.tag === m.catalog_tag));
+    state.materials.push(...materials);
+    for (const m of materials) state.mappings[m.catalog_tag] = m.version_id;
+    saveState();
+    renderAll();
+    alert(`${materials.length}개 자재를 추가하고 매핑했습니다.`);
+  });
+
   document.getElementById('matCalcType').addEventListener('change', updateMaterialFormUnit);
   document.getElementById('matMode').addEventListener('change', updateMaterialFormUnit);
   document.getElementById('matQuality').addEventListener('change', (e) => {
