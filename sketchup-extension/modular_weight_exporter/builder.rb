@@ -177,27 +177,31 @@ module ModularWeightExporter
       scan_nested_roles(children_entities(entity), module_id, element_id, diagnostics)
 
       tag = ModularWeightExporter.tag_of(entity)
+      # 진단 메시지에 사람이 알아볼 수 있는 이름/Tag를 붙인다 (element_id만으론 SketchUp에서 못 찾음).
+      display_name = entity.name.to_s.empty? ? '(이름없음)' : entity.name
+      label = tag ? "#{display_name} [Tag:#{tag}]" : display_name
+
       if tag.nil?
-        diagnostics << diag('MISSING_TAG', element_id, module_id, '자재 Tag가 지정되지 않았습니다.')
+        diagnostics << diag('MISSING_TAG', element_id, module_id, "#{label}: 자재 Tag가 지정되지 않았습니다.")
       elsif tag !~ TAG_RE
-        diagnostics << diag('UNCLASSIFIED', element_id, module_id, "Tag 형식이 규칙(^[A-Z][A-Z0-9_.]*$)과 다릅니다: #{tag}")
+        diagnostics << diag('UNCLASSIFIED', element_id, module_id, "#{label}: Tag 형식이 규칙(^[A-Z][A-Z0-9_.]*$)과 다릅니다.")
       end
 
       excluded = ModularWeightExporter.get_attr(entity, 'excluded', false) ? true : false
       exclude_reason = ModularWeightExporter.get_attr(entity, 'exclude_reason')
       if excluded && (exclude_reason.nil? || exclude_reason.to_s.empty?)
-        diagnostics << diag('UNCLASSIFIED', element_id, module_id, '제외 부재에 사유가 없습니다.')
+        diagnostics << diag('UNCLASSIFIED', element_id, module_id, "#{label}: 제외 부재에 사유가 없습니다.")
       end
 
       basis = ModularWeightExporter.quantity_basis_of(entity)
       metrics = { 'area_m2' => nil, 'volume_m3' => nil, 'length_m' => nil, 'count' => nil }
 
       if basis.nil? || basis.to_s.empty?
-        diagnostics << diag('BASIS_MISMATCH', element_id, module_id, 'quantity_basis가 지정되지 않았습니다. "부재로 지정" 명령으로 다시 지정하세요.')
+        diagnostics << diag('BASIS_MISMATCH', element_id, module_id, "#{label}: quantity_basis가 지정되지 않았습니다. \"부재로 지정\" 명령으로 다시 지정하세요.")
       elsif !QUANTITY_BASES.include?(basis)
-        diagnostics << diag('BASIS_MISMATCH', element_id, module_id, "알 수 없는 quantity_basis: #{basis}")
+        diagnostics << diag('BASIS_MISMATCH', element_id, module_id, "#{label}: 알 수 없는 quantity_basis: #{basis}")
       else
-        fill_metric!(metrics, basis, entity, element_id, module_id, parent_transform, total_transform, diagnostics)
+        fill_metric!(metrics, basis, entity, element_id, module_id, parent_transform, total_transform, diagnostics, label)
       end
 
       min, max = Geometry.world_bounds_m(entity, parent_transform)
@@ -223,26 +227,27 @@ module ModularWeightExporter
       }
     end
 
-    def fill_metric!(metrics, basis, entity, element_id, module_id, parent_transform, total_transform, diagnostics)
+    def fill_metric!(metrics, basis, entity, element_id, module_id, parent_transform, total_transform, diagnostics, label = nil)
+      label ||= entity.name.to_s.empty? ? '(이름없음)' : entity.name
       case basis
       when 'REFERENCE_FACES'
         ids = ModularWeightExporter.get_attr(entity, 'reference_face_ids', [])
         ids = [] if ids.nil?
         if ids.empty?
-          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, '기준면이 지정되지 않았습니다. "기준면 지정" 명령을 먼저 실행하세요.')
+          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, "#{label}: 기준면이 지정되지 않았습니다. \"기준면 지정\" 명령을 먼저 실행하세요.")
           return
         end
         found = Geometry.find_faces_by_ids(children_entities(entity), ids, total_transform, [])
         if found.empty?
-          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, '지정된 기준면을 찾을 수 없습니다(편집 후 삭제되었을 수 있음). 다시 지정하세요.')
+          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, "#{label}: 지정된 기준면을 찾을 수 없습니다(편집 후 삭제되었을 수 있음). 다시 지정하세요.")
           return
         end
         if found.length < ids.length
-          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, "지정된 기준면 #{ids.length}개 중 #{found.length}개만 찾았습니다.")
+          diagnostics << diag('INVALID_REFERENCE', element_id, module_id, "#{label}: 지정된 기준면 #{ids.length}개 중 #{found.length}개만 찾았습니다.")
         end
         area_m2, centroid = Geometry.compute_area(found)
         if area_m2.nil? || area_m2 <= 0
-          diagnostics << diag('DEGENERATE_GEOMETRY', element_id, module_id, '기준면 면적이 0에 가깝습니다.')
+          diagnostics << diag('DEGENERATE_GEOMETRY', element_id, module_id, "#{label}: 기준면 면적이 0에 가깝습니다.")
           return
         end
         metrics['area_m2'] = {
@@ -254,18 +259,18 @@ module ModularWeightExporter
       when 'SOLID'
         faces = Geometry.collect_all_faces(children_entities(entity), total_transform, [])
         if faces.empty?
-          diagnostics << diag('MISSING_METRIC', element_id, module_id, '체적을 계산할 형상이 없습니다.')
+          diagnostics << diag('MISSING_METRIC', element_id, module_id, "#{label}: 체적을 계산할 형상이 없습니다.")
           return
         end
         volume_m3, centroid = Geometry.compute_volume(faces)
         if volume_m3.nil? || volume_m3 <= 0
-          diagnostics << diag('NON_MANIFOLD', element_id, module_id, '닫힌 솔리드가 아니거나 면 방향이 일관되지 않습니다.')
+          diagnostics << diag('NON_MANIFOLD', element_id, module_id, "#{label}: 닫힌 솔리드가 아니거나 면 방향이 일관되지 않습니다.")
           return
         end
         native = native_volume_m3(entity)
         if native && (native - volume_m3).abs > ([native, volume_m3].max * 0.01 + 1e-9)
           diagnostics << diag('NON_MANIFOLD', element_id, module_id,
-                               "체적 적분(#{volume_m3.round(6)}m³)이 SketchUp 자체 체적(#{native.round(6)}m³)과 1% 이상 차이납니다. 닫힘 여부를 확인하세요.")
+                               "#{label}: 체적 적분(#{volume_m3.round(6)}m³)이 SketchUp 자체 체적(#{native.round(6)}m³)과 1% 이상 차이납니다. 닫힘 여부를 확인하세요.")
         end
         metrics['volume_m3'] = {
           'value' => volume_m3, 'centroid_world_m' => centroid,
@@ -275,19 +280,19 @@ module ModularWeightExporter
       when 'AXIS_ENDPOINTS'
         pts = ModularWeightExporter.get_attr(entity, 'axis_endpoints_local')
         if pts.nil? || pts.length != 2
-          diagnostics << diag('MISSING_METRIC', element_id, module_id, '기준축 두 점이 지정되지 않았습니다. "기준축 지정" 명령을 먼저 실행하세요.')
+          diagnostics << diag('MISSING_METRIC', element_id, module_id, "#{label}: 기준축 두 점이 지정되지 않았습니다. \"기준축 지정\" 명령을 먼저 실행하세요.")
           return
         end
         p1 = Geom::Point3d.new(pts[0][0], pts[0][1], pts[0][2])
         p2 = Geom::Point3d.new(pts[1][0], pts[1][1], pts[1][2])
         length_m, mid = Geometry.compute_length(p1, p2, total_transform)
         if length_m.nil? || length_m <= 1e-9
-          diagnostics << diag('DEGENERATE_GEOMETRY', element_id, module_id, '기준축 길이가 0에 가깝습니다.')
+          diagnostics << diag('DEGENERATE_GEOMETRY', element_id, module_id, "#{label}: 기준축 길이가 0에 가깝습니다.")
           return
         end
         length_axis_index = ModularWeightExporter.get_attr(entity, 'length_axis_index', 0)
         if Geometry.section_scale_invalid?(total_transform, length_axis_index)
-          diagnostics << diag('INVALID_SECTION_SCALE', element_id, module_id, '단면 방향 스케일이 균일하지 않습니다. 규격/단중 불일치 위험이 있어 자동 계산하지 않습니다.')
+          diagnostics << diag('INVALID_SECTION_SCALE', element_id, module_id, "#{label}: 단면 방향 스케일이 균일하지 않습니다. 규격/단중 불일치 위험이 있어 자동 계산하지 않습니다.")
           return
         end
         metrics['length_m'] = {
