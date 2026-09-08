@@ -150,11 +150,14 @@ module ModularWeightExporter
       [x, y, z]
     end
 
-    # LENGTH 부재: 로컬 X축이 길이 방향이라는 관례(명세 1.3)를 가정하고,
-    # 단면(Y/Z) 방향 스케일이 서로 다르면 규격이 왜곡된 것으로 본다 (명세 1.3, INVALID_SECTION_SCALE).
-    def section_scale_invalid?(transform)
-      _x, y, z = axis_scales(transform)
-      (y - z).abs > [y, z, 1.0].max * 1e-4
+    # LENGTH 부재: length_axis_index(기본 0=로컬 X, 명세 1.3의 관례)를 길이 방향으로 보고,
+    # 나머지 두 축(단면 방향) 스케일이 서로 다르면 규격이 왜곡된 것으로 본다 (INVALID_SECTION_SCALE).
+    # 자동 인식(AutoDetect)은 실제로 긴 축이 X가 아닐 수도 있어 length_axis_index를 넘겨준다.
+    def section_scale_invalid?(transform, length_axis_index = 0)
+      scales = axis_scales(transform)
+      other = (0..2).reject { |i| i == length_axis_index }
+      a, b = scales[other[0]], scales[other[1]]
+      (a - b).abs > [a, b, 1.0].max * 1e-4
     end
 
     # MODULE 변환이 이동/회전만으로 이루어진 강체 변환인지 검사한다 (명세 1.3).

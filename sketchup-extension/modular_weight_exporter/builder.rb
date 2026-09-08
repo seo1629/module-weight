@@ -285,8 +285,9 @@ module ModularWeightExporter
           diagnostics << diag('DEGENERATE_GEOMETRY', element_id, module_id, '기준축 길이가 0에 가깝습니다.')
           return
         end
-        if Geometry.section_scale_invalid?(total_transform)
-          diagnostics << diag('INVALID_SECTION_SCALE', element_id, module_id, '단면(로컬 Y/Z) 방향 스케일이 균일하지 않습니다. 규격/단중 불일치 위험이 있어 자동 계산하지 않습니다.')
+        length_axis_index = ModularWeightExporter.get_attr(entity, 'length_axis_index', 0)
+        if Geometry.section_scale_invalid?(total_transform, length_axis_index)
+          diagnostics << diag('INVALID_SECTION_SCALE', element_id, module_id, '단면 방향 스케일이 균일하지 않습니다. 규격/단중 불일치 위험이 있어 자동 계산하지 않습니다.')
           return
         end
         metrics['length_m'] = {
