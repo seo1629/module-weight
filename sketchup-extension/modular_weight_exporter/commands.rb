@@ -267,21 +267,22 @@ module ModularWeightExporter
       UI.messagebox("#{targets.length}개를 PART(#{basis})로 지정했습니다.\nTag는 SketchUp의 Tag(레이어) 패널에서 별도로 지정하세요.#{protected_warning(protected_targets)}")
     end
 
+    # IGNORE는 "실수로 덮어씀"이 아니라 "의도적으로 계산에서 뺌"이라는 뜻이므로,
+    # 다른 명령과 달리 MODULE 그룹에도 적용할 수 있게 허용한다 (모듈 전체를 통째로
+    # 제외하고 싶을 때 - 예: 참고용/구버전 프레임이 같은 파일에 남아있는 경우).
     def assign_ignore
-      all_targets = selected_containers
-      return alert_no_selection if all_targets.empty?
-      protected_targets, targets = split_protected(all_targets)
-      if targets.empty?
-        UI.messagebox("선택한 항목이 전부 이미 MODULE로 지정된 그룹입니다 (보호됨).\n모듈 껍데기를 IGNORE로 지정할 수 없습니다.")
-        return
-      end
+      targets = selected_containers
+      return alert_no_selection if targets.empty?
+      was_module = targets.select { |e| ModularWeightExporter.role_of(e) == 'MODULE' }
       result = UI.inputbox(['제외 사유 (필수)'], [''], 'IGNORE 지정')
       return if result == false || result[0].to_s.strip.empty?
       targets.each do |e|
         ModularWeightExporter.set_attr(e, 'role', 'IGNORE')
         ModularWeightExporter.set_attr(e, 'exclude_reason', result[0])
       end
-      UI.messagebox("#{targets.length}개를 IGNORE로 지정했습니다.#{protected_warning(protected_targets)}")
+      msg = "#{targets.length}개를 IGNORE로 지정했습니다."
+      msg += "\n\n(이전에 MODULE로 지정되어 있던 #{was_module.length}개 포함: #{entity_names(was_module)})" unless was_module.empty?
+      UI.messagebox(msg)
     end
 
     def toggle_excluded
