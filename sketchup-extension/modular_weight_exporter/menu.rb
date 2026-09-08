@@ -16,7 +16,8 @@ module ModularWeightExporter
       advanced.add_item('② 컨테이너로 지정 (CONTAINER)') { Commands.assign_container }
       advanced.add_item('③ 부재로 지정 (PART, 계산유형 직접 선택)') { Commands.assign_part }
       advanced.add_item('④ 제외 그룹으로 지정 (IGNORE)') { Commands.assign_ignore }
-      advanced.add_item('④-A 기준면·기준축 자동 채우기 (유형은 유지, ③ 다음에 사용)') { Commands.fill_basis_geometry }
+      advanced.add_item('④-A 기준면·기준축 자동 채우기 (선택한 것만, 유형 유지)') { Commands.fill_basis_geometry }
+      advanced.add_item('④-B 기준면·기준축 전체 새로고침 (모델 전체, 선택 불필요)') { Commands.refresh_all_basis_geometry }
       advanced.add_separator
       advanced.add_item('⑤ 기준면 지정 - AREA (편집모드 안에서, 면 직접 선택)') { Commands.assign_reference_faces }
       advanced.add_item('⑥ 기준축 지정 - LENGTH (편집모드 안에서, 점 직접 클릭)') { Commands.start_axis_pick_tool }

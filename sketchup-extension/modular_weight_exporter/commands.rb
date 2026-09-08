@@ -170,6 +170,54 @@ module ModularWeightExporter
       UI.messagebox("기준면/기준축 자동 채우기 결과 (#{targets.length}개):\n\n#{lines.join("\n")}")
     end
 
+    # 선택 상태와 무관하게 모델 전체를 뒤져서 AREA/LENGTH 부재의 기준면/기준축을
+    # 전부 현재 형상 기준으로 다시 채운다. Tag로 하나하나 선택해서 채우다가 빠뜨리는
+    # 부재가 계속 생겨서, 놓치는 게 없도록 만든 전체 일괄 버전이다.
+    def refresh_all_basis_geometry
+      targets = []
+      Builder.each_part_entity(Sketchup.active_model.entities) { |e| targets << e }
+      targets.select! { |e| %w[REFERENCE_FACES AXIS_ENDPOINTS].include?(ModularWeightExporter.quantity_basis_of(e)) }
+      if targets.empty?
+        UI.messagebox('AREA(면적) 또는 LENGTH(길이)로 지정된 부재를 모델에서 찾지 못했습니다.')
+        return
+      end
+      result = UI.messagebox(
+        "모델 전체에서 AREA/LENGTH로 지정된 부재 #{targets.length}개의 기준면/기준축을 " \
+        "전부 현재 형상 기준으로 다시 채웁니다 (선택 상태와 무관하게 모델 전체를 검사합니다).\n계속하시겠습니까?",
+        MB_YESNO
+      )
+      return if result == IDNO
+
+      fixed = 0
+      skipped = []
+      targets.each do |e|
+        begin
+          basis = ModularWeightExporter.quantity_basis_of(e)
+          label = e.name.to_s.empty? ? '(이름없음)' : e.name
+          if basis == 'REFERENCE_FACES'
+            faces = AutoDetect.all_faces(e)
+            if faces.empty?
+              skipped << label
+            else
+              ModularWeightExporter.set_attr(e, 'reference_face_ids', faces.map(&:persistent_id))
+              fixed += 1
+            end
+          elsif basis == 'AXIS_ENDPOINTS'
+            axis_index, p1, p2 = AutoDetect.axis_endpoints_for(e)
+            ModularWeightExporter.set_attr(e, 'axis_endpoints_local', [p1, p2])
+            ModularWeightExporter.set_attr(e, 'length_axis_index', axis_index)
+            fixed += 1
+          end
+        rescue StandardError
+          skipped << label
+        end
+      end
+
+      msg = "#{fixed}개 부재의 기준면/기준축을 새로고침했습니다."
+      msg += "\n\n면/형상을 찾지 못해 건너뛴 부재 #{skipped.length}개: #{skipped.join(', ')}" unless skipped.empty?
+      UI.messagebox(msg)
+    end
+
     def assign_module
       targets = selected_containers
       return alert_no_selection if targets.empty?

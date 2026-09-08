@@ -139,6 +139,23 @@ module ModularWeightExporter
       end
     end
 
+    # role=PART인 모든 부재를 모델 전체(선택 상태 무관)에서 찾아 블록에 넘긴다.
+    # MODULE/CONTAINER/role미지정 그룹은 계속 재귀하고, IGNORE와 PART는 재귀를 멈춘다.
+    def each_part_entity(entities, &block)
+      entities.each do |e|
+        next unless container_like?(e)
+        role = ModularWeightExporter.role_of(e)
+        case role
+        when 'PART'
+          block.call(e)
+        when 'IGNORE'
+          next
+        else
+          each_part_entity(children_entities(e), &block)
+        end
+      end
+    end
+
     # PART 내부에 role이 지정된 그룹(다른 PART 등)이 숨어있는지 점검한다.
     def scan_nested_roles(entities, module_id, element_id, diagnostics)
       entities.each do |e|
