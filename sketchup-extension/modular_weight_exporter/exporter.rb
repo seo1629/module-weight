@@ -15,7 +15,7 @@ module ModularWeightExporter
         'exported_at' => Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'exporter' => {
           'name' => 'ModularWeightExporter',
-          'version' => '0.1.0',
+          'version' => '0.6.0',
           'sketchup_version' => Sketchup.version,
         },
         'model' => { 'id' => ModularWeightExporter.model_id, 'name' => model_name },
