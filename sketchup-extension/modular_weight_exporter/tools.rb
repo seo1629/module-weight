@@ -99,4 +99,50 @@ module ModularWeightExporter
       Sketchup.active_model.select_tool(nil)
     end
   end
+
+  # 두 점을 클릭해서 그 사이 거리를 바로 재는 범용 측정 도구. role/Tag 지정과 무관하며
+  # 편집모드에 들어갈 필요 없이 모델 어디서나(세계 좌표) 바로 쓸 수 있다.
+  # mode: :display면 길이만 보여주고 끝, :unit_weight면 이어서 총중량을 물어 단위중량까지 계산한다.
+  class LengthMeasureTool
+    def initialize(mode = :display)
+      @mode = mode
+    end
+
+    def activate
+      @ip = Sketchup::InputPoint.new
+      @points = []
+    end
+
+    def onMouseMove(_flags, x, y, view)
+      @ip.pick(view, x, y)
+      view.invalidate
+    end
+
+    def draw(view)
+      @ip.draw(view) if @ip && @ip.valid?
+      return if @points.empty?
+      view.draw_points([@points[0]], 12, 1, 'red')
+    end
+
+    def onLButtonDown(_flags, x, y, view)
+      @ip.pick(view, x, y)
+      @points << @ip.position
+      finish if @points.length == 2
+    end
+
+    def onCancel(_reason, _view)
+      Sketchup.active_model.select_tool(nil)
+    end
+
+    def finish
+      p1, p2 = @points
+      length_m = Geometry.to_m(p1.distance(p2))
+      Sketchup.active_model.select_tool(nil)
+      if @mode == :unit_weight
+        Measure.prompt_and_show_unit_weight(length_m, 'm', '길이')
+      else
+        UI.messagebox("측정된 길이: 약 #{length_m.round(4)} m")
+      end
+    end
+  end
 end
