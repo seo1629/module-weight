@@ -331,20 +331,100 @@ module ModularWeightExporter
       Sketchup.active_model.select_tool(CentroidPickTool.new)
     end
 
-    def show_attributes
+    # 선택된 그룹(들)이 지금 어떤 Tag(자재)로 연결되고, 무게를 어떤 기준(AREA/VOLUME/
+    # LENGTH/COUNT)으로 계산하는지, 그 기준으로 지금 형상에서 실제로 얼마가 나오는지까지
+    # 한 번에 보여준다. entity.transformation만 사용한 미리보기라 모듈/컨테이너의 배치
+    # 회전·이동은 반영되지만, 정확한 최종 값은 JSON 내보내기 시 전체 경로로 다시 계산된다.
+    def describe_selection
       targets = selected_containers
       return alert_no_selection if targets.empty?
-      e = targets.first
-      dict = e.attribute_dictionary(ATTR_DICT)
-      if dict.nil?
-        UI.messagebox("[#{e.name}]\n지정된 modular_weight 속성이 없습니다.")
-        return
+
+      blocks = targets.first(12).map { |e| describe_one_entity(e) }
+      msg = blocks.join("\n\n" + ('-' * 40) + "\n\n")
+      msg += "\n\n... 외 #{targets.length - 12}개 더 (한 번에 최대 12개만 표시)" if targets.length > 12
+      UI.messagebox(msg)
+    end
+
+    def describe_one_entity(e)
+      role = ModularWeightExporter.role_of(e)
+      name = e.name.to_s.empty? ? '(이름없음)' : e.name
+      tag = ModularWeightExporter.tag_of(e)
+      header = "[#{name}]  Tag(자재): #{tag || '(없음)'}"
+
+      case role
+      when nil
+        "#{header}\n역할: 미지정 (①/★/③으로 지정 필요)"
+      when 'MODULE'
+        "#{header}\n역할: MODULE (모듈 껍데기 - 자체 무게 없음, 안의 부재들을 집계)"
+      when 'CONTAINER'
+        cat = ModularWeightExporter.category_of(e)
+        "#{header}\n역할: CONTAINER (집계용 - 자체 무게 없음) · 공종: #{cat || '(미지정)'}"
+      when 'IGNORE'
+        reason = ModularWeightExporter.get_attr(e, 'exclude_reason')
+        "#{header}\n역할: IGNORE (계산에서 완전히 제외됨)\n사유: #{reason || '(없음)'}"
+      when 'PART'
+        cat = ModularWeightExporter.category_of(e)
+        excluded = ModularWeightExporter.get_attr(e, 'excluded', false)
+        lines = [header, "역할: PART · 공종: #{cat || '(상위에서 상속 또는 미지정)'}"]
+        lines << "⚠ 이 부재는 현재 '제외' 상태입니다 (계산에 포함 안 됨)" if excluded
+        lines << describe_basis(e)
+        lines.join("\n")
+      else
+        "#{header}\n역할: 알 수 없음(#{role})"
       end
-      lines = []
-      dict.each_pair { |k, v| lines << "#{k}: #{v.inspect}" }
-      lines.sort!
-      lines << "tag(레이어): #{ModularWeightExporter.tag_of(e).inspect}"
-      UI.messagebox("[#{e.name}]\n" + lines.join("\n"))
+    rescue StandardError => err
+      "[#{e.name}]\n미리보기 중 오류: #{err.message}"
+    end
+
+    # PART의 quantity_basis에 맞춰 "무게를 구하는 기준"을 사람이 읽을 말로 설명하고,
+    # 현재 형상으로 실제 계산해본 예상 물량까지 같이 보여준다.
+    def describe_basis(e)
+      basis = ModularWeightExporter.quantity_basis_of(e)
+      transform = e.transformation
+      children = Builder.children_entities(e)
+
+      case basis
+      when 'REFERENCE_FACES'
+        ids = ModularWeightExporter.get_attr(e, 'reference_face_ids', [])
+        ids = [] if ids.nil?
+        return "계산 기준: AREA(면적) - 기준면이 아직 지정되지 않았습니다 (⑤ 또는 ★로 지정 필요)" if ids.empty?
+        found = Geometry.find_faces_by_ids(children, ids, transform, [])
+        return "계산 기준: AREA(면적) - 지정된 기준면 #{ids.length}개를 찾을 수 없습니다 (형상이 바뀌었을 수 있음)" if found.empty?
+        area_m2, = Geometry.compute_area(found)
+        "계산 기준: AREA(면적)\n" \
+        "  → 기준면 #{found.length}개(지정 #{ids.length}개)의 면적을 더해서 계산\n" \
+        "  → 지금 형상 기준 예상 면적: 약 #{area_m2.round(4)} m²\n" \
+        "  → 무게 = 이 면적 × 웹 자재 DB에서 이 Tag에 매핑한 kg/m² 단중"
+      when 'SOLID'
+        faces = Geometry.collect_all_faces(children, transform, [])
+        return "계산 기준: VOLUME(체적) - 계산할 형상이 없습니다" if faces.empty?
+        volume_m3, = Geometry.compute_volume(faces)
+        "계산 기준: VOLUME(체적)\n" \
+        "  → 닫힌 솔리드 전체의 체적을 적분해서 계산\n" \
+        "  → 지금 형상 기준 예상 체적: 약 #{volume_m3.round(6)} m³\n" \
+        "  → 무게 = 이 체적 × 웹 자재 DB에서 이 Tag에 매핑한 kg/m³ 밀도(비중)"
+      when 'AXIS_ENDPOINTS'
+        pts = ModularWeightExporter.get_attr(e, 'axis_endpoints_local')
+        return "계산 기준: LENGTH(길이) - 기준축이 아직 지정되지 않았습니다 (⑥ 또는 ★로 지정 필요)" if pts.nil? || pts.length != 2
+        p1 = Geom::Point3d.new(pts[0][0], pts[0][1], pts[0][2])
+        p2 = Geom::Point3d.new(pts[1][0], pts[1][1], pts[1][2])
+        length_m, = Geometry.compute_length(p1, p2, transform)
+        "계산 기준: LENGTH(길이)\n" \
+        "  → 지정된 기준축 두 점 사이의 거리로 계산\n" \
+        "  → 지금 형상 기준 예상 길이: 약 #{length_m.round(4)} m\n" \
+        "  → 무게 = 이 길이 × 웹 자재 DB에서 이 Tag에 매핑한 kg/m 단중"
+      when 'INSTANCE'
+        override = ModularWeightExporter.get_attr(e, 'centroid_override_local')
+        cg_note = override && override.length == 3 ? '사용자 지정 중심점 있음' : '중심점 미지정 (경계상자 중심으로 추정됨)'
+        "계산 기준: COUNT(개수)\n" \
+        "  → 이 부재 1개당 1EA로 계산 (물량은 항상 1)\n" \
+        "  → 무게중심: #{cg_note}\n" \
+        "  → 무게 = 1 × 웹 자재 DB에서 이 Tag에 매핑한 kg/EA 단중"
+      when nil, ''
+        "계산 기준: 지정되지 않음 (③ 또는 ★로 지정 필요)"
+      else
+        "계산 기준: 알 수 없는 값(#{basis})"
+      end
     end
 
     def reissue_model_id
