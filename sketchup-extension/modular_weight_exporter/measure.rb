@@ -153,6 +153,75 @@ module ModularWeightExporter
       UI.messagebox("합계 계산 중 오류가 발생했습니다: #{e.message}")
     end
 
+    # 총중량을 모를 때(카탈로그 정미중량 없음) 쓰는 이론 계산.
+    # 선택한 형상(주로 강재 등 LENGTH형 부재)의 체적을 실제로 재고, 길이로 나눠
+    # 단면적을 구한 뒤 비중을 곱한다 - 손으로 단면적을 근사하지 않고 모델링된
+    # 형상(중공 단면 등 포함)을 그대로 반영하는 게 핵심이다.
+    # 단위중량(kg/m) = (체적 ÷ 길이) × 비중 × 1000 = 단면적 × 밀도
+    def theoretical_unit_weight_by_cross_section
+      targets = Sketchup.active_model.selection.to_a.select { |e| e.is_a?(Sketchup::Group) || e.is_a?(Sketchup::ComponentInstance) }
+      if targets.empty?
+        UI.messagebox(
+          "단면적을 계산할 형상을 먼저 선택하세요.\n" \
+          "실제 부재 전체를 선택해도 되고, 계산이 편하도록 1m 등 임의 길이로 잘라 " \
+          "모델링한 샘플(같은 단면)을 선택해도 됩니다. 중공관이면 속이 빈 부분까지 " \
+          "형상에 반영되어 있어야 정확합니다."
+        )
+        return
+      end
+      e = targets.first
+      mode, volume_m3, = volume_or_area(e)
+      if mode != 'VOLUME'
+        UI.messagebox(
+          '선택한 형상이 닫힌 솔리드가 아니라 체적을 계산할 수 없습니다.\n' \
+          '(중공 단면이라면 바깥쪽뿐 아니라 속 빈 부분까지 실제 형상으로 모델링되어 있어야 합니다)'
+        )
+        return
+      end
+
+      len_result = UI.inputbox(
+        ['이 형상의 길이 (m)  - 모르면 취소 후 📏 길이 재기로 먼저 측정하세요'],
+        [''],
+        "체적 약 #{volume_m3.round(6)} m³ - 길이 입력"
+      )
+      return if len_result == false
+      length_m = len_result[0].to_f
+      if !(length_m > 0)
+        UI.messagebox('길이는 0보다 커야 합니다.')
+        return
+      end
+
+      cross_section_m2 = volume_m3 / length_m
+
+      sg_result = UI.inputbox(
+        ['비중 (SG, 물=1 기준) - 예: 철=7.85'],
+        [''],
+        "단면적 약 #{cross_section_m2.round(6)} m² - 비중 입력"
+      )
+      return if sg_result == false
+      sg = sg_result[0].to_f
+      if !(sg > 0)
+        UI.messagebox('비중은 0보다 커야 합니다.')
+        return
+      end
+
+      density = sg * 1000
+      unit_weight = cross_section_m2 * density
+
+      UI.messagebox(
+        "형상 기반 이론 단위중량 계산 결과\n\n" \
+        "체적: #{volume_m3.round(6)} m³\n" \
+        "길이: #{length_m.round(4)} m\n" \
+        "→ 단면적: #{cross_section_m2.round(6)} m²  (체적 ÷ 길이)\n\n" \
+        "비중: #{sg}  (밀도 #{density.round(1)} kg/m³)\n\n" \
+        "→ 단위중량: #{unit_weight.round(4)} kg/m\n\n" \
+        "이 값을 웹 자재 DB의 '단중' 항목(LENGTH, kg/m)에 입력하시면 됩니다.\n" \
+        "이론값이니 출처는 'KS 규격표 대조 필요' 등으로 남겨두세요."
+      )
+    rescue StandardError => e
+      UI.messagebox("계산 중 오류가 발생했습니다: #{e.message}")
+    end
+
     # 물량(quantity_value, 단위 unit_symbol)과 사용자가 입력하는 총중량(kg)으로
     # 단위중량을 계산해서 보여준다. 웹 자재 DB에 그대로 입력할 수 있는 값이다.
     def prompt_and_show_unit_weight(quantity_value, unit_symbol, label)

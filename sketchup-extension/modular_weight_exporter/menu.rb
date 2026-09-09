@@ -17,7 +17,8 @@ module ModularWeightExporter
       measure.add_item('📏 길이 재기 (두 점 클릭)') { Sketchup.active_model.select_tool(LengthMeasureTool.new(:display)) }
       measure.add_item('📦 체적·면적 재기 (선택한 형상)') { Measure.measure_volume_area }
       measure.add_item('📊 선택 항목 물량 합계 (Tag 검산용)') { Measure.sum_selected_quantities }
-      measure.add_item('⚖️ 단위중량 계산기 (물량 ÷ 총중량)') { Measure.unit_weight_calculator }
+      measure.add_item('⚖️ 단위중량 계산기 (물량 ÷ 총중량, 카탈로그 중량 있을 때)') { Measure.unit_weight_calculator }
+      measure.add_item('🧮 형상 기반 단위중량 계산 (단면적×비중, 총중량 모를 때)') { Measure.theoretical_unit_weight_by_cross_section }
       menu.add_separator
 
       advanced = menu.add_submenu('수동/고급 지정')
