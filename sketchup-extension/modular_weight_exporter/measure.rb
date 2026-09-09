@@ -51,6 +51,108 @@ module ModularWeightExporter
       UI.messagebox("측정 중 오류가 발생했습니다: #{e.message}")
     end
 
+    # Tag로 여러 부재를 한꺼번에 선택했을 때(Tags 패널 Select Entities), 그 전체의
+    # 물량 합계를 계산유형별로 내서 보여준다. 각 부재는 이미 저장된 기준면/기준축/
+    # quantity_basis를 그대로 쓰므로, 내보내기 시 웹앱 "자재 집계" 표에 나오는 물량과
+    # 같은 값이 나와야 한다 (검산용).
+    def sum_selected_quantities
+      targets = Sketchup.active_model.selection.to_a.select { |e| e.is_a?(Sketchup::Group) || e.is_a?(Sketchup::ComponentInstance) }
+      if targets.empty?
+        UI.messagebox("합계를 낼 부재들을 먼저 선택하세요.\n(Tags 패널에서 Tag 우클릭 → Select Entities 추천)")
+        return
+      end
+
+      sums = { 'AREA' => 0.0, 'VOLUME' => 0.0, 'LENGTH' => 0.0, 'COUNT' => 0.0 }
+      counts = { 'AREA' => 0, 'VOLUME' => 0, 'LENGTH' => 0, 'COUNT' => 0 }
+      failed = []
+      skipped_non_part = 0
+
+      targets.each do |e|
+        if ModularWeightExporter.role_of(e) != 'PART'
+          skipped_non_part += 1
+          next
+        end
+        name = e.name.to_s.empty? ? '(이름없음)' : e.name
+        tag = ModularWeightExporter.tag_of(e) || '(Tag없음)'
+        basis = ModularWeightExporter.quantity_basis_of(e)
+        transform = e.transformation
+        children = Builder.children_entities(e)
+
+        begin
+          case basis
+          when 'REFERENCE_FACES'
+            ids = ModularWeightExporter.get_attr(e, 'reference_face_ids', [])
+            ids = [] if ids.nil?
+            found = ids.empty? ? [] : Geometry.find_faces_by_ids(children, ids, transform, [])
+            if found.empty?
+              failed << "#{name} [Tag:#{tag}]: 기준면 없음/못 찾음"
+            else
+              area_m2, = Geometry.compute_area(found)
+              if area_m2 && area_m2 > 0
+                sums['AREA'] += area_m2
+                counts['AREA'] += 1
+              else
+                failed << "#{name} [Tag:#{tag}]: 면적 0"
+              end
+            end
+          when 'SOLID'
+            faces = Geometry.collect_all_faces(children, transform, [])
+            if faces.empty?
+              failed << "#{name} [Tag:#{tag}]: 형상 없음"
+            else
+              volume_m3, = Geometry.compute_volume(faces)
+              if volume_m3 && volume_m3 > 0
+                sums['VOLUME'] += volume_m3
+                counts['VOLUME'] += 1
+              else
+                failed << "#{name} [Tag:#{tag}]: 닫힌 솔리드 아님"
+              end
+            end
+          when 'AXIS_ENDPOINTS'
+            pts = ModularWeightExporter.get_attr(e, 'axis_endpoints_local')
+            if pts.nil? || pts.length != 2
+              failed << "#{name} [Tag:#{tag}]: 기준축 없음"
+            else
+              p1 = Geom::Point3d.new(pts[0][0], pts[0][1], pts[0][2])
+              p2 = Geom::Point3d.new(pts[1][0], pts[1][1], pts[1][2])
+              length_m, = Geometry.compute_length(p1, p2, transform)
+              if length_m && length_m > 0
+                sums['LENGTH'] += length_m
+                counts['LENGTH'] += 1
+              else
+                failed << "#{name} [Tag:#{tag}]: 길이 0"
+              end
+            end
+          when 'INSTANCE'
+            sums['COUNT'] += 1
+            counts['COUNT'] += 1
+          else
+            failed << "#{name} [Tag:#{tag}]: 계산유형 미지정"
+          end
+        rescue StandardError => err
+          failed << "#{name} [Tag:#{tag}]: 오류(#{err.message})"
+        end
+      end
+
+      lines = ["선택 #{targets.length}개 (PART 아님/미지정 #{skipped_non_part}개 제외)", '']
+      lines << "LENGTH 합계: #{sums['LENGTH'].round(4)} m  (#{counts['LENGTH']}개)" if counts['LENGTH'] > 0
+      lines << "AREA 합계: #{sums['AREA'].round(4)} m²  (#{counts['AREA']}개)" if counts['AREA'] > 0
+      lines << "VOLUME 합계: #{sums['VOLUME'].round(6)} m³  (#{counts['VOLUME']}개)" if counts['VOLUME'] > 0
+      lines << "COUNT 합계: #{sums['COUNT'].round(0)} EA  (#{counts['COUNT']}개)" if counts['COUNT'] > 0
+      lines << '계산된 물량이 없습니다.' if counts.values.all?(&:zero?)
+
+      unless failed.empty?
+        lines << ''
+        lines << "계산 실패 #{failed.length}건:"
+        lines.concat(failed.first(10).map { |f| "- #{f}" })
+        lines << "... 외 #{failed.length - 10}건 더" if failed.length > 10
+      end
+
+      UI.messagebox("물량 합계 (웹앱 자재 집계표와 비교용)\n\n" + lines.join("\n"))
+    rescue StandardError => e
+      UI.messagebox("합계 계산 중 오류가 발생했습니다: #{e.message}")
+    end
+
     # 물량(quantity_value, 단위 unit_symbol)과 사용자가 입력하는 총중량(kg)으로
     # 단위중량을 계산해서 보여준다. 웹 자재 DB에 그대로 입력할 수 있는 값이다.
     def prompt_and_show_unit_weight(quantity_value, unit_symbol, label)
