@@ -958,7 +958,10 @@ function renderMaterials() {
     <td>${m.unit_weight}</td><td>${escapeHtml(m.unit)}</td><td>${m.quality}</td>
     <td>${escapeHtml(m.source)}</td><td class="tag-mono">${escapeHtml(m.version_id)}</td>
     <td>${m.active === false ? '비활성' : '활성'}</td>
-    <td><button class="btn btn-ghost" data-toggle="${m.version_id}">${m.active === false ? '활성화' : '비활성화'}</button></td>
+    <td>
+      <button class="btn btn-ghost" data-edit="${m.version_id}">수정</button>
+      <button class="btn btn-ghost" data-toggle="${m.version_id}">${m.active === false ? '활성화' : '비활성화'}</button>
+    </td>
   </tr>`).join('') || '<tr><td colspan="10" class="hint">등록된 자재 없음</td></tr>';
 
   tbody.querySelectorAll('[data-toggle]').forEach((btn) => {
@@ -968,6 +971,46 @@ function renderMaterials() {
       saveState(); renderAll();
     });
   });
+
+  tbody.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const m = state.materials.find((mm) => mm.version_id === btn.getAttribute('data-edit'));
+      if (m) startEditMaterial(m);
+    });
+  });
+}
+
+// 자재 목록에서 "수정"을 누르면 그 자재의 현재 값으로 입력폼을 채운다.
+// 저장하면 새 버전이 생성되고, 이 버전은 자동으로 비활성화 + Tag 매핑이 새 버전으로 이동한다.
+function startEditMaterial(m) {
+  document.getElementById('matEditingId').value = m.version_id;
+  document.getElementById('matName').value = m.name;
+  document.getElementById('matSpec').value = m.specification || '';
+
+  document.getElementById('matCalcType').value = m.calc_type;
+  document.getElementById('matCalcType').dispatchEvent(new Event('change'));
+
+  if (m.calc_type === 'AREA' && m.density_kg_m3 && m.thickness_m) {
+    document.getElementById('matMode').value = 'DENSITY_THICKNESS';
+    document.getElementById('matMode').dispatchEvent(new Event('change'));
+    document.getElementById('matDensity').value = m.density_kg_m3;
+    document.getElementById('matDensityUnit').value = 'kg/m3';
+    document.getElementById('matThickness').value = m.thickness_m;
+  } else {
+    document.getElementById('matMode').value = 'DIRECT';
+    document.getElementById('matMode').dispatchEvent(new Event('change'));
+    document.getElementById('matWeight').value = m.unit_weight;
+    if (m.calc_type === 'AREA') document.getElementById('matWeightUnit').value = 'kg/m2';
+  }
+
+  document.getElementById('matQuality').value = m.quality;
+  document.getElementById('matQuality').dispatchEvent(new Event('change'));
+  document.getElementById('matEstimateReason').value = m.estimate_reason || '';
+  document.getElementById('matSource').value = m.source;
+  document.getElementById('matSourceDate').value = m.source_date || '';
+  document.getElementById('matCancelEditBtn').hidden = false;
+
+  document.getElementById('materialForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderReports() {
@@ -1295,7 +1338,8 @@ function bindMaterials() {
     }
 
     const editingId = document.getElementById('matEditingId').value;
-    const baseMaterialId = editingId ? state.materials.find((m) => m.version_id === editingId).material_id : uid('mat');
+    const editingMaterial = editingId ? state.materials.find((m) => m.version_id === editingId) : null;
+    const baseMaterialId = editingMaterial ? editingMaterial.material_id : uid('mat');
     const versionId = uid('v');
     state.materials.push({
       material_id: baseMaterialId,
@@ -1312,6 +1356,14 @@ function bindMaterials() {
       thickness_m: thickness, density_kg_m3: density,
       active: true,
     });
+    if (editingMaterial) {
+      // 수정 = 새 버전 생성 + 이전 버전 비활성화 + 그 버전을 가리키던 Tag 매핑을 새 버전으로 이동.
+      // 확정된(fixedSnapshot) 결과는 스냅샷이 따로 있어 영향받지 않는다.
+      editingMaterial.active = false;
+      for (const tag of Object.keys(state.mappings)) {
+        if (state.mappings[tag] === editingId) state.mappings[tag] = versionId;
+      }
+    }
     e.target.reset();
     document.getElementById('matEditingId').value = '';
     document.getElementById('matCancelEditBtn').hidden = true;
