@@ -21,9 +21,6 @@ module ModularWeightExporter
       measure.add_item('🧮 형상 기반 단위중량 계산 (단면적×비중, 총중량 모를 때)') { Measure.theoretical_unit_weight_by_cross_section }
       menu.add_separator
 
-      menu.add_item('🏗️ 스틸 스터드 배치 (CAD 단면 선택 → 자동 압출·배열·PART 지정)') { Generator.start_stud_tool }
-      menu.add_separator
-
       advanced = menu.add_submenu('수동/고급 지정')
       advanced.add_item('② 컨테이너로 지정 (CONTAINER)') { Commands.assign_container }
       advanced.add_item('③ 부재로 지정 (PART, 계산유형 직접 선택)') { Commands.assign_part }

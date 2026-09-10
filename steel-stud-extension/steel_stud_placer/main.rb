@@ -1,4 +1,4 @@
-# 스틸 스터드 생성·배치 도구.
+# 스틸 스터드 생성·배치 도구 (독립 확장 프로그램).
 #
 # 사용 순서:
 # 1. CAD(dwg/dxf 등)에서 만든 스터드 단면을 SketchUp File > Import로 가져와
@@ -7,10 +7,20 @@
 # 3. 높이 -> 간격 -> 공종 -> Tag를 순서대로 입력.
 # 4. 3D 화면에서 배치선의 시작점 -> 끝점을 클릭.
 #
+# 생성된 스터드에는 "modular_weight"라는 이름의 AttributeDictionary에
+# role="PART", category, quantity_basis="AXIS_ENDPOINTS", axis_endpoints_local을
+# 직접 기록한다. 이건 "모듈러 중량 Exporter" 확장 프로그램과 공유하는 데이터 계약일
+# 뿐이고, 이 파일은 그 확장 프로그램의 Ruby 코드를 전혀 참조하지 않는다 - 따로
+# 설치되어 있지 않아도 이 도구 자체는 정상 동작한다.
+#
 # 알려진 한계(v1):
 # - 벽 방향에 맞춰 단면을 자동으로 회전하지 않는다 (무게 계산에는 영향 없음, 방향만 관련).
 # - 배치선이 완전히 수평(같은 높이)이라고 가정하고, 시작점의 Z를 기준 바닥으로 쓴다.
-module ModularWeightExporter
+module SteelStudPlacer
+  ATTR_DICT = 'modular_weight'.freeze
+  CATEGORIES = %w[STRUCTURE FLOOR WALL CEILING OPENING MEP OTHER].freeze
+  IN_TO_M = 0.0254
+
   module Generator
     module_function
 
@@ -119,11 +129,11 @@ module ModularWeightExporter
         y = p1.y + dy * t
         transform = Geom::Transformation.new([x, y, base_z])
         inst = entities.add_instance(solid_def, transform)
-        ModularWeightExporter.set_attr(inst, 'role', 'PART')
-        ModularWeightExporter.set_attr(inst, 'category', category)
-        ModularWeightExporter.set_attr(inst, 'quantity_basis', 'AXIS_ENDPOINTS')
-        ModularWeightExporter.set_attr(inst, 'axis_endpoints_local', axis_endpoints_local)
-        ModularWeightExporter.set_attr(inst, 'length_axis_index', 2) # 로컬 Z축이 길이 방향
+        inst.set_attribute(ATTR_DICT, 'role', 'PART')
+        inst.set_attribute(ATTR_DICT, 'category', category)
+        inst.set_attribute(ATTR_DICT, 'quantity_basis', 'AXIS_ENDPOINTS')
+        inst.set_attribute(ATTR_DICT, 'axis_endpoints_local', axis_endpoints_local)
+        inst.set_attribute(ATTR_DICT, 'length_axis_index', 2) # 로컬 Z축이 길이 방향
         if tag
           layers = model.layers
           layer = layers[tag] || layers.add(tag)
@@ -133,8 +143,8 @@ module ModularWeightExporter
       end
 
       model.commit_operation
-      length_m = Geometry.to_m(length_in)
-      height_m = Geometry.to_m(height_in)
+      length_m = length_in * IN_TO_M
+      height_m = height_in * IN_TO_M
       UI.messagebox(
         "스터드 #{count}개를 배치했습니다.\n\n" \
         "배치선 길이: #{length_m.round(3)} m\n" \
@@ -142,7 +152,8 @@ module ModularWeightExporter
         "높이: #{height_m.round(3)} m\n" \
         "공종: #{category}\n" \
         "#{tag ? "Tag: #{tag}" : 'Tag는 아직 없음 - SketchUp Tag 패널에서 직접 지정하세요'}\n\n" \
-        "role=PART, 계산유형=LENGTH로 이미 지정되어 있어 바로 ⑩ 검증 대상이 됩니다."
+        "role=PART, 계산유형=LENGTH로 이미 지정되어 있어, '모듈러 중량 Exporter'가 설치되어 " \
+        "있다면 바로 검증 대상이 됩니다."
       )
     rescue StandardError => e
       model.abort_operation
@@ -195,4 +206,17 @@ module ModularWeightExporter
       Generator.place_studs(@points[0], @points[1], @template_def, @height_mm, @spacing_mm, @category, @tag)
     end
   end
+
+  module Menu
+    module_function
+
+    def register!
+      return if @registered
+      @registered = true
+      menu = UI.menu('Extensions').add_submenu('스틸 스터드 배치 도구')
+      menu.add_item('🏗️ 스틸 스터드 배치 (CAD 단면 선택 → 자동 압출·배열·PART 지정)') { Generator.start_stud_tool }
+    end
+  end
 end
+
+SteelStudPlacer::Menu.register!

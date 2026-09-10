@@ -10,7 +10,7 @@ module ModularWeightExporter
       File.join(File.dirname(__FILE__), 'modular_weight_exporter', 'main.rb')
     )
     EXTENSION.description = '모듈러 건축 부재의 물량(면적/체적/길이/개수)과 세계 좌표를 계산해 웹 Weight Calculator용 Export JSON으로 저장합니다.'
-    EXTENSION.version = '0.8.0'
+    EXTENSION.version = '0.8.1'
     EXTENSION.creator = 'Modular Weight Project'
     EXTENSION.copyright = '2026'
     Sketchup.register_extension(EXTENSION, true)
