@@ -81,7 +81,26 @@ module SteelStudPlacer
       inst = solid_def.entities.add_instance(template_def, Geom::Transformation.new)
       inst.explode
       faces = solid_def.entities.grep(Sketchup::Face)
-      raise '선택한 형상에서 닫힌 2D 면을 찾지 못했습니다 (단면이 닫힌 폴리곤이어야 합니다).' if faces.empty?
+
+      if faces.empty?
+        # CAD(DXF/DWG)에서 가져온 선은 닫힌 루프라도 SketchUp이 면을 자동 생성하지
+        # 않는 경우가 흔하다. Edge#find_faces는 "기존 선을 다시 그어서 면 인식을
+        # 유도하는" 수동 트릭과 같은 일을 한다.
+        solid_def.entities.grep(Sketchup::Edge).each do |edge|
+          begin
+            edge.find_faces
+          rescue StandardError
+            # 무시하고 다음 edge 시도
+          end
+        end
+        faces = solid_def.entities.grep(Sketchup::Face)
+      end
+
+      if faces.empty?
+        raise '선택한 형상에서 닫힌 2D 면을 찾지 못했습니다. 형상을 더블클릭해 편집모드로 들어가서, ' \
+              '테두리 선 하나를 Line 도구로 다시 그어보세요(기존 선과 겹치게 시작점→끝점 클릭) - ' \
+              'SketchUp이 닫힌 루프를 인식하면 면이 자동 생성됩니다. 그 후 다시 시도하세요.'
+      end
       faces.each do |f|
         begin
           f.pushpull(height_in)

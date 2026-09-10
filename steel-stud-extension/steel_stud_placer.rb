@@ -13,7 +13,7 @@ module SteelStudPlacer
       File.join(File.dirname(__FILE__), 'steel_stud_placer', 'main.rb')
     )
     EXTENSION.description = 'CAD로 만든 스터드 단면을 압출해서 지정한 간격으로 자동 배치합니다.'
-    EXTENSION.version = '0.1.0'
+    EXTENSION.version = '0.2.0'
     EXTENSION.creator = 'Modular Weight Project'
     EXTENSION.copyright = '2026'
     Sketchup.register_extension(EXTENSION, true)
